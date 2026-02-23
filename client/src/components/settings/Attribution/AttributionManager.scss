@@ -99,6 +99,11 @@
     }
   }
 
+  .div-container{
+    display: flex;
+    gap:4rem;
+  }
+
   // Groupes de champs (Re-use StudentManager logic)
   .input-group {
     margin-bottom: 1.25rem;
@@ -110,11 +115,6 @@
       color: var(--text-muted);
     }
 
-
-    .div-container{
-      display: flex;
-      gap:4rem;
-    }
     input, select {
       width: 95%;
       background: rgba(0, 0, 0, 0.3);

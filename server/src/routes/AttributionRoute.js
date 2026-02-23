@@ -3,7 +3,7 @@ const router = express.Router();
 const AttributionController = require('../controllers/AttributionController');
 const verifyToken = require('../middleware/authMiddleware');
 
-router.use(verifyToken); // Protège toutes les routes d'attribution
+router.use(verifyToken);
 
 router.get('/', AttributionController.getAttributions);
 router.post('/', AttributionController.createAttribution);

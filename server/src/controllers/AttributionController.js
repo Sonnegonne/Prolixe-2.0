@@ -1,7 +1,9 @@
 const pool = require('../../config/database');
 
 class AttributionController {
+
     static async getAttributions(req, res) {
+
         const userId = req.user.id;
         try {
             const [rows] = await pool.execute(`
@@ -18,16 +20,29 @@ class AttributionController {
 
     static async createAttribution(req, res) {
         const userId = req.user.id;
-        const { school_year_id, school_name, className, subject, esi_hours, ess_hours, color } = req.body;
+        const { school_year_id, start_date, end_date, school_name, className, esi_hours, ess_hours } = req.body;
+
         try {
             const [result] = await pool.execute(
-                `INSERT INTO ATTRIBUTIONS (school_year_id, user_id, school_name, class, subject, esi_hours, ess_hours, color) 
+                `INSERT INTO ATTRIBUTIONS
+                 (school_year_id, user_id, start_date, end_date, school_name, class, esi_hours, ess_hours)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                [school_year_id, userId, school_name, className, subject, esi_hours || 0, ess_hours || 0, color || '#3498db']
+                [
+                    school_year_id,   // school_year_id
+                    userId,           // user_id
+                    start_date,       // start_date
+                    end_date,         // end_date
+                    school_name,      // school_name
+                    className,        // class
+                    esi_hours ?? 0,   // esi_hours (utilise ?? pour accepter la valeur 0)
+                    ess_hours ?? 0    // ess_hours
+                ]
             );
+
             res.status(201).json({ success: true, id: result.insertId });
         } catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            console.error("Erreur lors de la création de l'attribution :", error.message);
+            res.status(500).json({ success: false, message: "Erreur interne du serveur" });
         }
     }
 

@@ -133,37 +133,116 @@ const AttributionManager = () => {
                 <div className="glass-modal-overlay">
                     <div className="glass-modal">
                         <h3>{editing ? 'Modifier' : 'Nouvelle attribution'}</h3>
-                        <form onSubmit={handleSave}>
+                        <form onSubmit={handleSave} className="attribution-form">
+                            {/* Section Année Scolaire */}
                             <div className="input-group">
-                                <label>Année scolaire</label>
-                                <select name="school_year_id" value={formData.school_year_id} onChange={handleFormChange} required>
-                                    <option value="">-- Choisir --</option>
+                                <label htmlFor="school_year_id">Année scolaire</label>
+                                <select
+                                    id="school_year_id"
+                                    name="school_year_id"
+                                    value={formData.school_year_id}
+                                    onChange={handleFormChange}
+                                    required
+                                >
+                                    <option value="">-- Choisir une période --</option>
                                     {schoolYears.map(sy => (
-                                        <option key={sy.id} value={sy.id}>{sy.start_date} - {sy.end_date}</option>
+                                        <option key={sy.id} value={sy.id}>
+                                            {new Date(sy.start_date).getFullYear()} - {new Date(sy.end_date).getFullYear()}
+                                        </option>
                                     ))}
                                 </select>
                             </div>
-                            <div className="input-group">
-                                <label>École</label>
-                                <input name="school_name" type="text" value={formData.school_name} onChange={handleFormChange} placeholder="Nom de l'école" required />
+
+                            {/* Section École et Classe */}
+                            <div className="grid-row">
+                                <div className="input-group flex-2">
+                                    <label htmlFor="school_name">École</label>
+                                    <input
+                                        id="school_name"
+                                        name="school_name"
+                                        type="text"
+                                        value={formData.school_name}
+                                        onChange={handleFormChange}
+                                        placeholder="Ex: ISLW"
+                                        required
+                                    />
+                                </div>
+                                <div className="input-group flex-1">
+                                    <label htmlFor="className">Classe / Cours</label>
+                                    <input
+                                        id="className"
+                                        name="className"
+                                        type="text"
+                                        value={formData.className}
+                                        onChange={handleFormChange}
+                                        placeholder="Ex: 3TTINFO"
+                                    />
+                                </div>
                             </div>
-                            <div className="input-group">
-                                <label>Classe</label>
-                                <input name="className" type="text" value={formData.className} onChange={handleFormChange} placeholder="Ex: 3TT" />
-                            </div>
+
+                            {/* Dates de l'attribution */}
                             <div className="div-container">
                                 <div className="input-group">
-                                    <label>Début</label>
-                                    <input name="start_date" type="date" value={formData.start_date} onChange={handleFormChange} required />
+                                    <label htmlFor="start_date">Date de début</label>
+                                    <input
+                                        id="start_date"
+                                        name="start_date"
+                                        type="date"
+                                        value={formData.start_date}
+                                        onChange={handleFormChange}
+                                        required
+                                    />
                                 </div>
                                 <div className="input-group">
-                                    <label>Fin</label>
-                                    <input name="end_date" type="date" value={formData.end_date} onChange={handleFormChange} required />
+                                    <label htmlFor="end_date">Date de fin</label>
+                                    <input
+                                        id="end_date"
+                                        name="end_date"
+                                        type="date"
+                                        value={formData.end_date}
+                                        onChange={handleFormChange}
+                                        required
+                                    />
                                 </div>
                             </div>
+
+                            {/* Heures (Important : type="number") */}
+                            <div className="div-container">
+                                <div className="input-group">
+                                    <label htmlFor="esi_hours">Heures ESI</label>
+                                    <input
+                                        id="esi_hours"
+                                        name="esi_hours"
+                                        type="number"
+                                        min="0"
+                                        step="0.5"
+                                        value={formData.esi_hours}
+                                        onChange={handleFormChange}
+                                        required
+                                    />
+                                </div>
+                                <div className="input-group">
+                                    <label htmlFor="ess_hours">Heures ESS</label>
+                                    <input
+                                        id="ess_hours"
+                                        name="ess_hours"
+                                        type="number"
+                                        min="0"
+                                        step="0.5"
+                                        value={formData.ess_hours}
+                                        onChange={handleFormChange}
+                                        required
+                                    />
+                                </div>
+                            </div>
+
                             <div className="modal-footer">
-                                <button type="button" className="cancel-btn" onClick={() => setShowForm(false)}>Annuler</button>
-                                <button type="submit" className="confirm-btn">Sauvegarder</button>
+                                <button type="button" className="cancel-btn" onClick={() => setShowForm(false)}>
+                                    Annuler
+                                </button>
+                                <button type="submit" className="confirm-btn">
+                                    Sauvegarder l'attribution
+                                </button>
                             </div>
                         </form>
                     </div>

@@ -254,8 +254,6 @@ const ScheduleCreator = () => {
                                     const cell = grid[`${d.id}-${h.id}`] || {};
                                     const cellColor = getGradatedColor(cell.subject_id, cell.class_id);
                                     if((d.id === 3 && h.id < 5) || (d.id !== 3)){
-                                        console.log("day : ", d);
-                                        console.log("hours : ", h);
                                         return (
                                             <td key={`${d.id}-${h.id}`} className="grid-cell grid-cell-hover" style={{ '--subject-color': cellColor }}>
                                                 <div className="input-group">

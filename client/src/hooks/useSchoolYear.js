@@ -74,7 +74,6 @@ export const useSchoolYears = () => {
             const fetchedSY = await schoolYearService.getById(id);
             return fetchedSY ? fetchedSY.start_date + " - " + fetchedSY.end_date : 'Année inconnue';
         } catch (err) {
-            console.error(err);
             return 'Erreur';
         }
 
