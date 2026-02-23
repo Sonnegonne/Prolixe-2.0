@@ -88,7 +88,6 @@ apiRouter.use('/users', require('./routes/UserRoute'));
 apiRouter.use('/classes', require('./routes/ClassRoutes'));
 apiRouter.use('/hours', require('./routes/ScheduleHours'));
 apiRouter.use('/schedule', require('./routes/ScheduleRoute'));
-apiRouter.use('/schedules/models', require('./routes/ScheduleModelRoute'));
 apiRouter.use('/journal', require('./routes/JournalRoute'));
 apiRouter.use('/attributions', require('./routes/AttributionRoute'));
 apiRouter.use('/evaluations', require('./routes/EvaluationRoute'));

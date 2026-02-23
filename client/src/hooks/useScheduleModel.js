@@ -2,38 +2,36 @@
 import { useState, useEffect, useCallback } from 'react';
 import ScheduleModelService from '../services/ScheduleModelService';
 
-const useScheduleModel = (journalId) => { // On accepte journalId ici
+const useScheduleModel = (journalId) => {
     const [schedules, setSchedules] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    // Utilisation de useCallback pour éviter de recréer la fonction à chaque rendu
     const fetchSchedules = useCallback(async () => {
         if (!journalId) return;
-
         setLoading(true);
         setError(null);
         try {
             const response = await ScheduleModelService.getSchedules(journalId);
-            setSchedules(response.data.schedules);
+            setSchedules(response.data.data || []);
         } catch (err) {
             const errorMessage = err.response?.data?.message || err.message || 'Erreur lors de la récupération';
             setError(errorMessage);
         } finally {
             setLoading(false);
         }
-    }, [journalId]); // Dépendance sur journalId
+    }, [journalId]);
 
-    const createSchedule = async (scheduleData) => {
+    const createSchedule = useCallback(async (scheduleData) => {
+        if (!journalId) throw new Error("Aucun journal sélectionné.");
         setLoading(true);
         setError(null);
         try {
-            // On s'assure d'envoyer journalId aussi à la création si nécessaire
             await ScheduleModelService.createSchedule(
                 scheduleData.name,
                 scheduleData.startDate,
                 scheduleData.endDate,
-                //journalId // Ajoutez-le si votre API de création en a besoin
+                journalId  // journalId correctement transmis
             );
             await fetchSchedules();
         } catch (err) {
@@ -43,14 +41,43 @@ const useScheduleModel = (journalId) => { // On accepte journalId ici
         } finally {
             setLoading(false);
         }
-    };
+    }, [journalId, fetchSchedules]);
 
-    // Le useEffect se déclenche maintenant dès que journalId change
+    const deleteSchedule = useCallback(async (scheduleSetId) => {
+        setLoading(true);
+        setError(null);
+        try {
+            await ScheduleModelService.deleteSchedule(scheduleSetId);
+            await fetchSchedules();
+        } catch (err) {
+            const errorMessage = err.response?.data?.message || err.message || 'Erreur lors de la suppression';
+            setError(errorMessage);
+            throw new Error(errorMessage);
+        } finally {
+            setLoading(false);
+        }
+    }, [fetchSchedules]);
+
+    const duplicateSchedule = useCallback(async (scheduleSetId, newName) => {
+        setLoading(true);
+        setError(null);
+        try {
+            await ScheduleModelService.duplicateSchedule(scheduleSetId, newName);
+            await fetchSchedules();
+        } catch (err) {
+            const errorMessage = err.response?.data?.message || err.message || 'Erreur lors de la duplication';
+            setError(errorMessage);
+            throw new Error(errorMessage);
+        } finally {
+            setLoading(false);
+        }
+    }, [fetchSchedules]);
+
     useEffect(() => {
         fetchSchedules();
     }, [fetchSchedules]);
 
-    return { schedules, loading, error, createSchedule, fetchSchedules };
+    return { schedules, loading, error, createSchedule, deleteSchedule, duplicateSchedule, fetchSchedules };
 };
 
 export default useScheduleModel;

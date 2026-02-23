@@ -6,7 +6,7 @@ const JournalContext = createContext(null);
 
 export const JournalProvider = ({ children }) => {
     const [journals, setJournals] = useState([]);
-    const [currentJournal, setCurrentJournal] = useState(null); // Initialisé à null
+    const [currentJournal, setCurrentJournal] = useState(null);
     const [archivedJournals, setArchivedJournals] = useState([]);
     const [journalEntries, setJournalEntries] = useState([]);
     const [assignments, setAssignments] = useState([]);
@@ -39,22 +39,12 @@ export const JournalProvider = ({ children }) => {
         loadAllJournals();
     }, [loadAllJournals]);
 
-    useEffect(() => {
-        if (currentJournal) {
-
-        }
-    }, [currentJournal]); // Se déclenche à chaque fois que currentJournal change
-
     const selectJournal = (journal) => {
         if (journal && journal.id) {
             setCurrentJournal(journal);
             localStorage.setItem('prolixe_currentJournalId', journal.id);
         }
     };
-
-    // Les autres fonctions qui dépendent de currentJournal (comme fetchJournalEntries, fetchAssignments) sont déjà des `useCallback`
-    // avec `[currentJournal]` comme dépendance, ce qui est une bonne pratique.
-    // Elles seront donc recréées et pourront utiliser la nouvelle valeur de `currentJournal` au prochain rendu.
 
     const clearJournal = useCallback(async (journalId) => {
         try {
@@ -122,9 +112,10 @@ export const JournalProvider = ({ children }) => {
         setLoading(true);
         setError(null);
         try {
+            /*
             let response = await JournalService.getAssignments(currentJournal.id, classId, startDate, endDate);
             response = response.data;
-            setAssignments(response.data || []);
+            setAssignments(response.data || []);*/
         } catch (err) {
             setError(err.message || 'Erreur lors de la récupération des devoirs.');
         } finally {
@@ -132,25 +123,41 @@ export const JournalProvider = ({ children }) => {
         }
     }, [currentJournal]);
 
+    /**
+     * ADAPTATION : Mappage des champs pour correspondre au JournalController SQL
+     */
     const upsertJournalEntry = useCallback(async (entryData) => {
         if (!currentJournal) throw new Error("Aucun journal sélectionné.");
         if (currentJournal.is_archived) throw new Error("Impossible de modifier un journal archivé.");
         setError(null);
         try {
-            const dataWithJournalId = { ...entryData, journal_id: currentJournal.id };
-            let response = await JournalService.upsertJournalEntry(dataWithJournalId);
+            // Mappage des noms de champs du Frontend vers le Backend (SQL)
+            const mappedData = {
+                id: entryData.id,
+                journal_id: currentJournal.id,
+                schedule_id: entryData.schedule_id,
+                entry_date: entryData.date,           // backend attend entry_date
+                content_planned: entryData.planned_work, // backend attend content_planned
+                content_done: entryData.actual_work,     // backend attend content_done
+                homework: entryData.notes             // backend attend homework
+            };
+
+            let response = await JournalService.upsertJournalEntry(mappedData);
             response = response.data;
-            const newEntry = response.data;
+
+            // On récupère l'ID généré si c'était une création
+            const savedEntry = { ...mappedData, id: response.data.id || mappedData.id };
+
             setJournalEntries(prev => {
-                const index = prev.findIndex(e => e.id === newEntry.id);
+                const index = prev.findIndex(e => e.id === savedEntry.id);
                 if (index > -1) {
                     const newEntries = [...prev];
-                    newEntries[index] = newEntry;
+                    newEntries[index] = savedEntry;
                     return newEntries;
                 }
-                return [...prev, newEntry];
+                return [...prev, savedEntry];
             });
-            return newEntry;
+            return savedEntry;
         } catch (err) {
             setError(err.message || "Erreur lors de la sauvegarde de l'entrée de journal.");
             throw err;
@@ -207,7 +214,7 @@ export const JournalProvider = ({ children }) => {
     const value = {
         journals, currentJournal, archivedJournals, selectJournal, loadAllJournals, createJournal, archiveJournal, deleteArchivedJournal,
         journalEntries, assignments, loading, error, fetchJournalEntries, fetchAssignments,
-        upsertJournalEntry, deleteJournalEntry, upsertAssignment, deleteAssignment,clearJournal
+        upsertJournalEntry, deleteJournalEntry, upsertAssignment, deleteAssignment, clearJournal
     };
 
     return <JournalContext.Provider value={value}>{children}</JournalContext.Provider>;

@@ -6,11 +6,19 @@ const HolidaysManagerService = {
         try {
             const response = await api.post('/holidays/upload', formData, {
                 headers: {
-                    // Très important : ne pas définir manuellement le Content-Type ici
-                    // Axios et le navigateur le feront automatiquement avec le bon "boundary"
                     'Content-Type': 'multipart/form-data',
                 },
             });
+            return response.data;
+        } catch (error) {
+            throw error;
+        }
+    },
+
+    // Nouvelle méthode pour récupérer les congés d'une année spécifique
+    getHolidaysByYear: async (schoolYearId) => {
+        try {
+            const response = await api.get(`/holidays/${schoolYearId}`);
             return response.data;
         } catch (error) {
             throw error;

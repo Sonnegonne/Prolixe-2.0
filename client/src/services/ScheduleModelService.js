@@ -3,24 +3,38 @@ import apiClient from '../api/axiosConfig';
 
 const ScheduleModelService = {
     /**
-     * Crée un nouvel emploi du temps.
-     * @param {string} name - Le nom de l'emploi du temps.
-     * @param {string} startDate - La date de début au format YYYY-MM-DD.
-     * @param {string} endDate - La date de fin au format YYYY-MM-DD.
-     * @returns {Promise<object>} - L'objet de réponse de l'API.
+     * Récupère tous les ensembles d'horaires pour un journal donné.
      */
-    createSchedule: (name, startDate, endDate) => {
-        return apiClient.post('/schedules/', { name, startDate, endDate });
+    getSchedules: (journalId) => {
+        return apiClient.get('/schedule/sets', {
+            params: { journal_id: journalId }
+        });
     },
 
     /**
-     * Récupère tous les modèles d'emplois du temps.
-     * @returns {Promise<object>} - L'objet de réponse de l'API contenant la liste des emplois du temps.
+     * Crée un nouvel ensemble d'horaires lié à un journal.
      */
-    getSchedules: (journalId) => {
-        return apiClient.get('/schedules/', {
-            params: { journalId }
+    createSchedule: (name, startDate, endDate, journalId) => {
+        return apiClient.post('/schedule/sets', {
+            name,
+            start_date: startDate,
+            end_date: endDate,
+            journal_id: journalId
         });
+    },
+
+    /**
+     * Supprime un ensemble d'horaires.
+     */
+    deleteSchedule: (scheduleSetId) => {
+        return apiClient.delete(`/schedule/sets/${scheduleSetId}`);
+    },
+
+    /**
+     * Duplique un ensemble d'horaires existant.
+     */
+    duplicateSchedule: (scheduleSetId, newName) => {
+        return apiClient.post(`/schedule/sets/${scheduleSetId}/duplicate`, { newName });
     }
 };
 

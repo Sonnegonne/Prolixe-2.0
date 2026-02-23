@@ -63,7 +63,7 @@ const ScheduleCreator = () => {
         try {
             setLoadingSets(true);
             const [resSets] = await Promise.all([
-                ScheduleService.getScheduleSets(),
+                ScheduleService.getScheduleSets(journalId),
                 loadSubjects(journalId)
             ]);
 
@@ -279,7 +279,7 @@ const ScheduleCreator = () => {
                                             </td>
                                         );
                                     }else{
-                                        return (<td className="grid-cell"></td>)
+                                        return (<td key={`${d.id}-${h.id}`} className="grid-cell"></td>);
                                     }
                                 })}
                             </tr>

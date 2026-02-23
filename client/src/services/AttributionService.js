@@ -24,7 +24,6 @@ const AttributionService = {
             return response.data;
         } else {
             // Création si c'est une nouvelle attribution
-            console.log("data : ", attributionData);
             const response = await api.post('/attributions', attributionData);
             return response.data;
         }

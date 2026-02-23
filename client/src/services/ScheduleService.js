@@ -6,17 +6,28 @@ const ScheduleService = {
      * Récupère tous les ensembles d'horaires (modèles) disponibles.
      * Note: La route backend est préfixée par /api/schedule dans axiosConfig ou app.use
      */
-    getScheduleSets: async () => {
-        // Suppression du 's' final sur /schedule pour correspondre à la route backend app.use('/api/schedule', ...)
-        const response = await axios.get('/schedule/sets');
+    getScheduleSets: async (journalId) => {
+        // On passe le journalId en paramètre de requête pour filtrer côté serveur
+        const response = await axios.get(`/schedule/sets?journalId=${journalId}`);
         return response.data;
     },
 
     /**
      * Crée un nouveau modèle d'emploi du temps (ex: "Horaire d'hiver")
      */
-    createScheduleSet: async (name, journalId) => {
-       return axios.post('/schedule/sets', { name, journal_id : journalId });
+    // client/src/services/ScheduleService.js
+    createScheduleSet: async (name, journalId, startDate, endDate) => {
+        return axios.post('/schedule/sets', {
+            name,
+            journal_id: journalId,
+            start_date: startDate,
+            end_date: endDate
+        });
+    },
+
+    getScheduleIdByDate: async (date) => {
+        const response = await axios.get(`/schedule/active-set?date=${date}`);
+        return response.data; // Retourne { success: true, id: ... }
     },
 
     /**
@@ -24,6 +35,7 @@ const ScheduleService = {
      * On passe le setId pour charger la grille correspondante.
      */
     getScheduleById: async (setId) => {
+        // Si vous avez simplifié la route au dessus, l'URL devient /api/schedule/1
         const response = await axios.get(`/schedule/${setId}`);
         return response.data;
     },

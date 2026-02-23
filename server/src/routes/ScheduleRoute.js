@@ -2,17 +2,21 @@
 const express = require('express');
 const router = express.Router();
 const ScheduleController = require('../controllers/ScheduleController');
-const verifyToken = require('../middleware/authMiddleware');
 
-router.use(verifyToken);
-
-router.get('/sets', ScheduleController.getUserSchedules);
+router.get('/sets', ScheduleController.getJournalSchedules);
 router.post('/sets', ScheduleController.createScheduleSet);
 
-router.get('/:id', ScheduleController.getFullSchedule);
+
 router.post('/slots/save', ScheduleController.saveSlots);
 
 router.post('/sets/:id/duplicate', ScheduleController.duplicateScheduleSet);
 router.delete('/sets/:id', ScheduleController.deleteScheduleSet);
+
+router.get('/active-set', ScheduleController.getScheduleByDate); // À placer AVANT router.get('/:id')
+
+router.get('/:id', (req, res, next) => {
+    console.log('>>> Route /:id atteinte, id =', req.params.id);
+    next();
+}, ScheduleController.getFullSchedule);
 
 module.exports = router;

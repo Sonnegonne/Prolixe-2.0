@@ -4,39 +4,63 @@ const pool = require('../../config/database');
 class ScheduleController {
 
     static async createScheduleSet(req, res) {
-        const { name, journal_id } = req.body;
+        const { name, journal_id, start_date, end_date } = req.body;
         const userId = req.user.id;
 
-        if (!name || !journal_id) {
+        if (!name || !journal_id || !start_date || !end_date) {
             return res.status(400).json({
                 success: false,
-                message: "Le nom et l'ID du journal sont requis."
+                message: "Le nom, l'ID du journal et les dates de validité sont requis."
             });
         }
 
         try {
             const [result] = await pool.execute(
-                'INSERT INTO SCHEDULE_SETS (user_id, journal_id, name) VALUES (?, ?, ?)',
-                [userId, journal_id, name]
+                'INSERT INTO SCHEDULE_SETS (user_id, journal_id, name, start_date, end_date) VALUES (?, ?, ?, ?, ?)',
+                [userId, journal_id, name, start_date, end_date]
             );
-            res.status(201).json({ success: true, id: result.insertId, name, journal_id });
+            res.status(201).json({ success: true, id: result.insertId, name });
         } catch (error) {
-            res.status(500).json({
-                success: false,
-                message: error.message || 'Erreur lors de la création'
-            });
+            res.status(500).json({ success: false, message: error.message });
         }
     }
 
-    /**
-     * Récupère la liste de tous les emplois du temps créés par l'utilisateur
-     */
-    static async getUserSchedules(req, res) {
+    static async getScheduleByDate(req, res) {
+        const { date } = req.query;
         const userId = req.user.id;
         try {
             const [rows] = await pool.execute(
-                'SELECT * FROM SCHEDULE_SETS WHERE user_id = ?',
-                [userId]
+                `SELECT id FROM SCHEDULE_SETS 
+             WHERE user_id = ? 
+             AND ? BETWEEN start_date AND end_date 
+             LIMIT 1`,
+                [userId, date]
+            );
+
+            if (rows.length === 0) {
+                return res.json({ success: true, id: null });
+            }
+            res.json({ success: true, id: rows[0].id });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    static async getJournalSchedules(req, res) {
+        const userId = req.user.id;
+        const { journalId } = req.query;
+
+        if (!journalId) {
+            return res.status(400).json({
+                success: false,
+                message: "L'ID du journal est requis pour récupérer les emplois du temps."
+            });
+        }
+
+        try {
+            const [rows] = await pool.execute(
+                'SELECT * FROM SCHEDULE_SETS WHERE user_id = ? AND journal_id = ?',
+                [userId, journalId]
             );
             res.json({ success: true, data: rows });
         } catch (error) {
@@ -92,25 +116,27 @@ class ScheduleController {
         }
     }
 
-    /**
-     * Récupère un emploi du temps complet avec les détails des attributions (Matière, Classe, etc.)
-     */
+
     static async getFullSchedule(req, res) {
-        const { id } = req.params; // ID du SCHEDULE_SET
+        const { id } = req.params;
         const userId = req.user.id;
 
         try {
-            // Vérification de la propriété du set
             const [sets] = await pool.execute(
-                'SELECT id FROM SCHEDULE_SETS WHERE id = ? AND user_id = ?',
+                'SELECT id, name, journal_id, start_time, end_time FROM SCHEDULE_SETS WHERE id = ? AND user_id = ?',
                 [id, userId]
             );
 
+            console.log("here : ", sets);
+
             if (sets.length === 0) {
-                return res.status(404).json({ success: false, message: "Emploi du temps non trouvé." });
+                console.log(`Accès refusé ou set inconnu : ID ${id} pour User ${userId}`);
+                return res.status(404).json({
+                    success: false,
+                    message: "Emploi du temps non trouvé ou vous n'avez pas les droits."
+                });
             }
 
-            // Récupération des slots avec les infos des classes et matières
             const [rows] = await pool.execute(`
                 SELECT
                     ss.id as slot_id,
@@ -125,17 +151,27 @@ class ScheduleController {
                     sbj.name as subject_name,
                     sbj.color_code as subject_color
                 FROM SCHEDULE_SLOTS ss
-                         JOIN SCH_HOURS sh ON ss.time_slot_id = sh.id
+                         LEFT JOIN SCH_HOURS sh ON ss.time_slot_id = sh.id
                          LEFT JOIN CLASSES c ON ss.class_id = c.id
                          LEFT JOIN SUBJECTS sbj ON ss.subject_id = sbj.id
                 WHERE ss.schedule_set_id = ?
-                ORDER BY ss.day_of_week
+                ORDER BY ss.day_of_week ASC
             `, [id]);
 
-            res.json({ success: true, data: rows });
+            // 3. Réponse structurée
+            res.json({
+                success: true,
+                metadata: sets[0], // Contient l'id, le nom et le journal_id du set
+                data: rows         // La liste des créneaux
+            });
+
         } catch (error) {
-            console.error("Erreur getFullSchedule:", error);
-            res.status(500).json({ success: false, message: "Erreur lors de la récupération", error: error.message });
+            console.error("Erreur critique getFullSchedule:", error);
+            res.status(500).json({
+                success: false,
+                message: "Erreur lors de la récupération des données",
+                error: error.message
+            });
         }
     }
 
