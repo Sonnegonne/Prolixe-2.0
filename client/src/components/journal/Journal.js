@@ -891,7 +891,8 @@ const JournalView = ({ journalId, isArchived }) => {
                                                     checked={!!assign.is_corrected}
                                                     disabled={isArchived}
                                                     onChange={() => {
-                                                        if (!isArchived) JournalService.upsertAssignment({ id: assign.id, is_corrected: !assign.is_corrected }).then(loadAssignments);
+                                                        const payload = { ...assign, is_corrected: !assign.is_corrected  };
+                                                        JournalService.upsertAssignment(payload).then(loadAssignments);
                                                     }}
                                                 />
                                                 Corrigé
