@@ -94,7 +94,7 @@ const App = () => {
                 if (currentPath !== '/login' &&
                     currentPath !== '/register' &&
                     currentPath !== '/reset-password') {
-                    navigate('/register', { replace: true });
+                    navigate('/login', { replace: true });
                 }
             }
         }
@@ -108,7 +108,6 @@ const App = () => {
         <div className={`app ${isMenuOpen ? 'menu-open' : 'menu-closed'}`}>
             {isAuthenticated ? (
                 <AuthenticatedAppContent
-
                     isMenuOpen={isMenuOpen}
                     toggleMenu={toggleMenu}
                 />
@@ -117,7 +116,7 @@ const App = () => {
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
-                    <Route path="*" element={<Navigate to="/register" replace />} />
+                    <Route path="*" element={<Navigate to="/login" replace />} />
                 </Routes>
             )}
 

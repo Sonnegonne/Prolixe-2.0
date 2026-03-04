@@ -17,11 +17,10 @@ static async request(endpoint, options = {}, requireAuth = true) {
         };
 
         if (requireAuth) {
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
             if (token) {
                 config.headers['Authorization'] = `Bearer ${token}`;
             } else {
-                // Si l'authentification est requise mais qu'il n'y a pas de jeton, on lève une erreur.
                 throw new Error('Authentication token not found.');
             }
         }
