@@ -1,9 +1,19 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import {
+    ChevronsRight,
+    Save,
+    ArrowLeft,
+    CheckCircle,
+    UserCheck,
+    MessageSquare,
+    ClipboardList
+} from 'lucide-react';
 import { getEvaluationForGrading, saveGrades } from '../../services/EvaluationService';
 import { useToast } from '../../hooks/useToast';
 import './CorrectionView.scss';
 
+// Sous-composant pour l'affichage riche des commentaires
 const CommentDisplay = ({ text }) => {
     if (!text) return null;
     const parts = text.split(/(\/\*[\s\S]*?\*\/)/g).filter(Boolean);
@@ -38,6 +48,8 @@ const CorrectionView = () => {
     const [editingCommentKey, setEditingCommentKey] = useState(null);
     const [absentStudents, setAbsentStudents] = useState(new Set());
 
+    // --- LOGIQUE DE DONNÉES ---
+
     const fetchData = useCallback(async () => {
         if (!evaluationId) return;
         try {
@@ -52,24 +64,18 @@ const CorrectionView = () => {
             if (students.length > 0) setSelectedStudentId(students[0].id);
 
             const gradesObject = {};
-            // 1. Charger les notes par critère
             criteriaGrades.forEach(cg => {
-                const key = `${cg.student_id}-${cg.criterion_id}`;
-                gradesObject[key] = {
+                gradesObject[`${cg.student_id}-${cg.criterion_id}`] = {
                     score: cg.score_obtained,
                     comment: cg.comment || '',
                 };
             });
 
-            // 2. Charger les commentaires globaux (par élève)
             globalGrades.forEach(g => {
-                gradesObject[`global-${g.student_id}`] = {
-                    comment: g.comment || ''
-                };
+                gradesObject[`global-${g.student_id}`] = { comment: g.comment || '' };
             });
 
             const absentSet = new Set(globalGrades.filter(g => g.is_absent).map(g => g.student_id));
-
             setGrades(gradesObject);
             setAbsentStudents(absentSet);
         } catch (err) {
@@ -80,6 +86,72 @@ const CorrectionView = () => {
     }, [evaluationId, showError]);
 
     useEffect(() => { fetchData(); }, [fetchData]);
+
+    const studentTotals = useMemo(() => {
+        const totals = {};
+        students.forEach(student => {
+            if (absentStudents.has(student.id)) {
+                totals[student.id] = null;
+            } else {
+                let sum = 0;
+                criteria.forEach(c => {
+                    const g = grades[`${student.id}-${c.id}`];
+                    if (g?.score !== null && g?.score !== undefined && g.score !== '') {
+                        const val = parseFloat(g.score);
+                        if (!isNaN(val)) sum += val;
+                    }
+                });
+                totals[student.id] = sum;
+            }
+        });
+        return totals;
+    }, [students, criteria, grades, absentStudents]);
+
+    // --- ACTIONS ---
+
+    const prepareStudentPayload = useCallback((studentId) => {
+        const isAbsent = absentStudents.has(studentId);
+        const totalScore = studentTotals[studentId] || 0;
+
+        const criteriaScores = criteria.map(criterion => {
+            const gradeInfo = grades[`${studentId}-${criterion.id}`] || { score: null, comment: '' };
+            return {
+                criterion_id: criterion.id,
+                score: isAbsent ? null : (gradeInfo.score === '' ? null : parseFloat(gradeInfo.score)),
+                comment: isAbsent ? null : gradeInfo.comment
+            };
+        });
+
+        return {
+            student_id: studentId,
+            total_score: totalScore,
+            is_absent: isAbsent,
+            comment: isAbsent ? null : (grades[`global-${studentId}`]?.comment || null),
+            criteria_scores: criteriaScores
+        };
+    }, [absentStudents, criteria, grades, studentTotals]);
+
+    const handleSaveCurrentAndNext = async () => {
+        if (!selectedStudentId) return;
+        setIsSaving(true);
+
+        try {
+            const payload = [prepareStudentPayload(selectedStudentId)];
+            await saveGrades(evaluationId, payload, { is_corrected: true, is_completed: true });
+
+            const currentIndex = students.findIndex(s => s.id === selectedStudentId);
+            if (currentIndex < students.length - 1) {
+                setSelectedStudentId(students[currentIndex + 1].id);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else {
+                success('Dernier élève enregistré !');
+            }
+        } catch (err) {
+            showError('Erreur lors de la sauvegarde de cet élève.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     const handleGradeChange = (studentId, criterionId, value, maxPoints) => {
         const key = `${studentId}-${criterionId}`;
@@ -103,97 +175,40 @@ const CorrectionView = () => {
         }
     };
 
-    const handleSave = async () => {
-        setIsSaving(true);
-
-        const studentGrades = students.map(student => {
-            const isAbsent = absentStudents.has(student.id);
-            let totalScore = 0; // On garde sum à 0
-
-            const criteriaScores = criteria.map(criterion => {
-                const gradeInfo = grades[`${student.id}-${criterion.id}`] || { score: null, comment: '' };
-
-                // CORRECTION ICI : Parser la note en nombre avant de l'ajouter
-                if (!isAbsent && gradeInfo.score !== null && gradeInfo.score !== '') {
-                    const val = parseFloat(gradeInfo.score);
-                    if (!isNaN(val)) totalScore += val;
-                }
-
-                return {
-                    criterion_id: criterion.id,
-                    score: isAbsent ? null : (gradeInfo.score === '' ? null : parseFloat(gradeInfo.score)),
-                    comment: isAbsent ? null : gradeInfo.comment
-                };
-            });
-
-            return {
-                student_id: student.id,
-                total_score: totalScore, // Maintenant c'est un vrai nombre (ex: 7.5)
-                is_absent: isAbsent,
-                comment: isAbsent ? null : (grades[`global-${student.id}`]?.comment || null),
-                criteria_scores: criteriaScores
-            };
-        });
-
-        try {
-            await saveGrades(evaluationId, studentGrades, { is_corrected: true, is_completed: true });
-            success('Correction enregistrée avec succès !');
-        } catch (err) {
-            showError('Erreur lors de la sauvegarde.');
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    const studentTotals = useMemo(() => {
-        const totals = {};
-        students.forEach(student => {
-            if (absentStudents.has(student.id)) {
-                totals[student.id] = null;
-            } else {
-                let sum = 0;
-                criteria.forEach(c => {
-                    const g = grades[`${student.id}-${c.id}`];
-                    // On vérifie que score n'est pas vide et on le force en float
-                    if (g?.score !== null && g?.score !== undefined && g.score !== '') {
-                        const val = parseFloat(g.score);
-                        if (!isNaN(val)) sum += val;
-                    }
-                });
-                totals[student.id] = sum;
-            }
-        });
-        return totals;
-    }, [students, criteria, grades, absentStudents]);
-
     if (isLoading) return <div className="loading-fullscreen">Chargement...</div>;
     if (!evaluation) return <div>Évaluation introuvable.</div>;
 
-    const totalMaxScore = evaluation.max_score;
     const isSelectedStudentAbsent = absentStudents.has(selectedStudentId);
+    const isLastStudent = students.findIndex(s => s.id === selectedStudentId) === students.length - 1;
 
     return (
         <div className="correction-view-focused">
             <div className="correction-header">
                 <div className="header-title">
-                    <Link to="/correction" className="back-link">← Retour</Link>
+                    <Link to="/correction" className="back-link"><ArrowLeft size={18}/> Retour</Link>
                     <h1>{evaluation.title}</h1>
                     <p>{evaluation.class_name} — {new Date(evaluation.evaluation_date).toLocaleDateString()}</p>
                 </div>
-                <button onClick={handleSave} className="btn-primary save-button" disabled={isSaving}>
-                    {isSaving ? 'Sauvegarde...' : '💾 Sauvegarder'}
+                <button
+                    onClick={() => saveGrades(evaluationId, students.map(s => prepareStudentPayload(s.id)), { is_corrected: true, is_completed: true }).then(() => success('Classe sauvegardée'))}
+                    className="btn-secondary"
+                >
+                    <Save size={18} /> Sauvegarder tout
                 </button>
             </div>
 
             <div className="correction-layout">
                 <div className="student-correction-panel">
                     <div className="student-selector-bar">
-                        <select
-                            value={selectedStudentId || ''}
-                            onChange={(e) => setSelectedStudentId(Number(e.target.value))}
-                        >
-                            {students.map(s => <option key={s.id} value={s.id}>{s.lastname} {s.firstname}</option>)}
-                        </select>
+                        <div className="select-wrapper">
+                            <UserCheck size={18} />
+                            <select
+                                value={selectedStudentId || ''}
+                                onChange={(e) => setSelectedStudentId(Number(e.target.value))}
+                            >
+                                {students.map(s => <option key={s.id} value={s.id}>{s.lastname} {s.firstname}</option>)}
+                            </select>
+                        </div>
                         <label className="absent-checkbox">
                             <input
                                 type="checkbox"
@@ -204,17 +219,19 @@ const CorrectionView = () => {
                                     else next.delete(selectedStudentId);
                                     setAbsentStudents(next);
                                 }}
-                            /> Absent
+                            /> <span>Absent</span>
                         </label>
                     </div>
 
                     <div className={`global-student-comment ${isSelectedStudentAbsent ? 'disabled' : ''}`}>
-                        <h4>Commentaire général pour l'élève</h4>
+                        <div className="section-title">
+                            <MessageSquare size={16} />
+                            <h4>Commentaire général</h4>
+                        </div>
                         {editingCommentKey === `global-${selectedStudentId}` ? (
                             <textarea
                                 className="comment-textarea global-textarea"
                                 autoFocus
-                                placeholder="Bilan de l'interrogation..."
                                 value={grades[`global-${selectedStudentId}`]?.comment || ''}
                                 onBlur={() => setEditingCommentKey(null)}
                                 onChange={(e) => setGrades(prev => ({
@@ -231,16 +248,17 @@ const CorrectionView = () => {
                                 {grades[`global-${selectedStudentId}`]?.comment ? (
                                     <CommentDisplay text={grades[`global-${selectedStudentId}`].comment} />
                                 ) : (
-                                    <button type="button" className="btn-add-comment" disabled={isSelectedStudentAbsent}>
-                                        + Ajouter un commentaire général
-                                    </button>
+                                    <span className="placeholder">+ Ajouter un bilan pour cet élève...</span>
                                 )}
                             </div>
                         )}
                     </div>
 
-
                     <div className="criteria-list">
+                        <div className="section-title">
+                            <ClipboardList size={16} />
+                            <h4>Critères d'évaluation</h4>
+                        </div>
                         {criteria.map(criterion => {
                             const key = `${selectedStudentId}-${criterion.id}`;
                             const gradeInfo = grades[key] || { score: '', comment: '' };
@@ -249,15 +267,12 @@ const CorrectionView = () => {
                             return (
                                 <div className={`criterion-row ${isSelectedStudentAbsent ? 'disabled' : ''}`} key={criterion.id}>
                                     <div className="criterion-main">
-                                        <div className="criterion-info">
-                                            <span className="criterion-name">{criterion.name}</span>
-                                        </div>
+                                        <span className="criterion-name">{criterion.name}</span>
                                         <div className="grade-input-group">
                                             <input
                                                 type="number"
                                                 step="0.25"
                                                 value={isSelectedStudentAbsent ? '' : gradeInfo.score ?? ''}
-                                                placeholder="-"
                                                 disabled={isSelectedStudentAbsent}
                                                 onChange={(e) => handleGradeChange(selectedStudentId, criterion.id, e.target.value, criterion.max_points)}
                                             />
@@ -284,21 +299,31 @@ const CorrectionView = () => {
                                 </div>
                             );
                         })}
+                    </div>
 
+                    <div className="navigation-footer">
                         <div className="student-total-display">
-                            <span>Total Élève :</span>
+                            <span>Total :</span>
                             <strong>
                                 {isSelectedStudentAbsent
                                     ? 'ABS'
-                                    : `${Number(studentTotals[selectedStudentId] || 0).toFixed(2)} / ${totalMaxScore}`
+                                    : `${Number(studentTotals[selectedStudentId] || 0).toFixed(2)} / ${evaluation.max_score}`
                                 }
                             </strong>
                         </div>
+                        <button
+                            onClick={handleSaveCurrentAndNext}
+                            className="btn-next-student"
+                            disabled={isSaving}
+                        >
+                            {isSaving ? 'Enregistrement...' : (isLastStudent ? 'Terminer la session' : 'Suivant')}
+                            {!isSaving && <ChevronsRight size={20} />}
+                        </button>
                     </div>
                 </div>
 
                 <div className="class-summary-panel">
-                    <h3>Classe</h3>
+                    <h3>Liste de la classe</h3>
                     <div className="summary-list">
                         {students.map(s => (
                             <div
@@ -306,18 +331,14 @@ const CorrectionView = () => {
                                 className={`summary-item ${s.id === selectedStudentId ? 'active' : ''}`}
                                 onClick={() => setSelectedStudentId(s.id)}
                             >
-                                <span>{s.lastname}</span>
-                                <strong>{studentTotals[s.id] === null ? 'ABS' : studentTotals[s.id].toFixed(1)}</strong>
+                                <span className="student-name">{s.lastname} {s.firstname}</span>
+                                <span className="student-score">
+                                    {studentTotals[s.id] === null ? 'ABS' : Number(studentTotals[s.id]).toFixed(1)}
+                                </span>
                             </div>
                         ))}
                     </div>
                 </div>
-            </div>
-
-            <div className="bottom-save-container">
-                <button onClick={handleSave} className="btn-primary save-button" disabled={isSaving}>
-                    {isSaving ? 'Sauvegarde...' : '💾 Sauvegarder'}
-                </button>
             </div>
         </div>
     );

@@ -2,17 +2,27 @@
 
 .correction-view-focused {
   @include page-container-base;
-  padding-bottom: 120px;
+  padding-bottom: 120px; // Espace pour la barre de navigation fixe
 
   .correction-header {
     @include page-header-base;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-bottom: 2rem;
 
     .header-title {
       text-align: left;
-      .back-link { display: block; color: var(--accent-blue); text-decoration: none; font-size: 0.9rem; margin-bottom: 0.5rem; &:hover { text-decoration: underline; } }
+      .back-link {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--accent-blue);
+        text-decoration: none;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+        &:hover { text-decoration: underline; }
+      }
       h1 { @include section-title-h1; font-size: 1.8rem; margin: 0; }
       p { @include section-paragraph; margin-top: 0.25rem; font-size: 0.95rem; opacity: 0.8; }
     }
@@ -22,122 +32,207 @@
     display: grid;
     grid-template-columns: 2fr 1fr;
     gap: 2rem;
-    margin-top: 1.5rem;
     @media (max-width: 1024px) { grid-template-columns: 1fr; }
   }
 
-  .student-correction-panel, .class-summary-panel { @include card-base; padding: 1.5rem; }
-
-  .student-selector-bar {
-    display: flex; align-items: center; gap: 1.5rem; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);
-    select { @include btn-secondary-base; flex-grow: 1; font-size: 1.1rem; padding: 0.6rem 1rem; }
-    .absent-checkbox { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 600; color: var(--text-secondary); }
+  .student-correction-panel, .class-summary-panel {
+    @include card-base;
+    padding: 1.5rem;
+    height: fit-content;
   }
 
+  // --- Sélecteur d'élève ---
+  .student-selector-bar {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+
+    .select-wrapper {
+      flex-grow: 1;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: var(--bg-dark-tertiary);
+      padding: 0 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+
+      select {
+        background: none;
+        border: none;
+        color: white;
+        width: 100%;
+        font-size: 1.1rem;
+        padding: 0.8rem 0;
+        outline: none;
+        cursor: pointer;
+      }
+    }
+
+    .absent-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      cursor: pointer;
+      white-space: nowrap;
+      span { font-weight: 600; color: var(--text-secondary); }
+      input { width: 18px; height: 18px; accent-color: var(--accent-blue); }
+    }
+  }
+
+  // --- Titres de sections ---
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    color: var(--accent-blue);
+    h4 { margin: 0; text-transform: uppercase; font-size: 0.85rem; letter-spacing: 0.5px; }
+  }
+
+  // --- Critères ---
   .criteria-list { display: flex; flex-direction: column; gap: 1.25rem; }
 
   .criterion-row {
-    padding: 1.25rem; background: var(--bg-dark-blue); border-radius: 0.75rem; border: 1px solid var(--border-color);
-    &.disabled { opacity: 0.4; pointer-events: none; }
+    padding: 1.25rem;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 0.75rem;
+    border: 1px solid var(--border-color);
+    transition: transform 0.2s;
+
+    &:hover { border-color: var(--accent-blue-transparent); }
+    &.disabled { opacity: 0.3; pointer-events: none; filter: grayscale(1); }
   }
 
   .criterion-main { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-  .criterion-name { font-size: 1.05rem; font-weight: 600; color: var(--text-light); }
+  .criterion-name { font-size: 1.05rem; font-weight: 500; color: var(--text-light); }
 
   .grade-input-group {
-    display: flex; align-items: center; gap: 0.5rem; background: var(--bg-dark-tertiary); padding: 0.4rem 0.8rem; border-radius: 8px; border: 1px solid var(--border-color);
-    input { width: 60px; background: none; border: none; color: var(--accent-green); font-size: 1.2rem; font-weight: 800; text-align: right; outline: none; }
-    .max-points { color: var(--text-muted); font-size: 0.9rem; }
+    display: flex; align-items: center; gap: 0.5rem; background: var(--bg-dark-tertiary); padding: 0.5rem 1rem; border-radius: 8px; border: 1px solid var(--border-color);
+    input { width: 80px; background: none; border: none; color: var(--accent-green); font-size: 1.2rem; font-weight: 800; text-align: right; outline: none; }
+    .max-points { color: var(--text-muted); font-size: 0.9rem; font-weight: 500; }
   }
 
   .criterion-comment {
     border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1rem;
-    .comment-preview { cursor: pointer; min-height: 38px; color: var(--text-muted); font-size: 0.9rem; font-style: italic; display: flex; align-items: center; }
-    textarea { width: 100%; min-height: 80px; background: var(--bg-dark-tertiary); border: 1px solid var(--accent-blue); border-radius: 6px; color: var(--text-light); padding: 0.8rem; font-family: 'Fira Code', monospace; }
+    textarea {
+      width: 100%; min-height: 90px; background: var(--bg-dark-tertiary); border: 1px solid var(--accent-blue);
+      border-radius: 6px; color: var(--text-light); padding: 0.8rem; font-family: inherit; line-height: 1.5;
+    }
+    .comment-preview {
+      color: var(--text-muted); font-size: 0.9rem; font-style: italic;
+      padding: 0.5rem; border-radius: 4px; &:hover { background: rgba(255,255,255,0.03); }
+    }
   }
 
+  // --- Commentaire Global ---
   .global-student-comment {
-    margin-top: 1.5rem; padding: 1.25rem; background: rgba(var(--accent-blue-rgb), 0.05); border: 1px dashed var(--accent-blue-transparent); border-radius: 8px;
-    h4 { font-size: 0.8rem; text-transform: uppercase; color: var(--accent-blue); margin: 0 0 1rem 0; }
-    .global-preview { min-height: 50px; cursor: pointer; }
-    .global-textarea { min-height: 120px; width: 100%; background: var(--bg-dark-tertiary); color: white; border: 1px solid var(--accent-blue); padding: 1rem; border-radius: 6px; }
+    margin-bottom: 2rem;
+    padding: 1.25rem;
+    background: rgba(var(--accent-blue-rgb), 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    &.disabled { opacity: 0.3; pointer-events: none; }
+
+    .global-textarea {
+      min-height: 120px; width: 100%; background: var(--bg-dark-tertiary); border: 1px solid var(--accent-blue);
+      padding: 1rem; border-radius: 8px; color: white; line-height: 1.6;
+    }
   }
 
-  .student-total-display {
-    margin-top: 1rem; padding: 1.25rem; background: var(--bg-dark-tertiary); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 2px solid var(--border-color);
-    strong { font-size: 1.4rem; color: var(--accent-green); }
+  // --- FOOTER FIXE (Score + Bouton Suivant) ---
+  .navigation-footer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 90px;
+    background: rgba(var(--bg-dark-primary-rgb), 0.95);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 2rem;
+    z-index: 1000;
+    box-shadow: 0 -10px 30px rgba(0,0,0,0.3);
+
+    .student-total-display {
+      display: flex;
+      align-items: baseline;
+      gap: 0.75rem;
+      span { color: var(--text-secondary); font-weight: 500; }
+      strong { font-size: 1.8rem; color: var(--accent-green); font-weight: 800; }
+    }
+
+    .btn-next-student {
+      @include btn-primary-base;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.8rem 2rem;
+      font-size: 1.1rem;
+      background: var(--accent-blue);
+      border-radius: 50px; // Style "pill" pour le bouton principal
+      box-shadow: 0 4px 15px rgba(var(--accent-blue-rgb), 0.3);
+
+      &:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(var(--accent-blue-rgb), 0.4);
+      }
+
+      &:disabled { opacity: 0.6; cursor: not-allowed; }
+    }
   }
 
-  .summary-list { display: flex; flex-direction: column; gap: 0.5rem; }
-  .summary-item {
-    display: flex; justify-content: space-between; padding: 0.75rem 1rem; background: var(--bg-dark-blue); border-radius: 6px; cursor: pointer;
-    &.active { border-left: 3px solid var(--accent-blue); background: var(--bg-dark-tertiary) ;}
+  // --- Barre Latérale (Sommaire) ---
+  .class-summary-panel {
+    h3 { margin-top: 0; font-size: 1.1rem; color: var(--text-secondary); margin-bottom: 1.5rem; }
+    .summary-list { display: flex; flex-direction: column; gap: 0.4rem; max-height: 70vh; overflow-y: auto; }
+
+    .summary-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.8rem 1rem; background: rgba(255,255,255,0.02); border-radius: 8px;
+      border: 1px solid transparent; transition: all 0.2s;
+
+      .student-name { font-size: 0.95rem; color: var(--text-muted); }
+      .student-score { font-weight: 700; color: var(--text-light); font-family: 'Fira Code', monospace; }
+
+      &.active {
+        background: rgba(var(--accent-blue-rgb), 0.1);
+        border-color: var(--accent-cyan);
+        .student-name { color: white; font-weight: 600; }
+        .student-score { color: var(--accent-green); }
+      }
+
+      &:hover:not(.active) { background: rgba(255,255,255,0.05); }
+    }
   }
 }
 
-.bottom-save-container {
-  position: fixed; bottom: 0; left: 0; right: 0; padding: 1.5rem 2rem; background: linear-gradient(transparent, var(--bg-dark-primary)); display: flex; justify-content: flex-end; z-index: 100;
-  .save-button { @include btn-primary-base; pointer-events: auto; }
-}
-
+// Bouton spécial "Ajouter" pour les commentaires vides
 .btn-add-comment {
   width: 100%;
-  padding: 0.75rem;
-  background: var(--bg-dark-tertiary); // Fond légèrement plus clair que la carte
+  padding: 0.8rem;
+  background: transparent;
   border: 1px dashed var(--border-color);
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--text-muted);
-  font-size: 0.9rem;
-  font-family: inherit;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  transition: all 0.2s ease-in-out;
+  font-size: 0.9rem;
+  transition: all 0.2s;
 
-  &:hover:not(:disabled) {
-    background-color: rgba(var(--accent-blue-rgb), 0.1);
+  &:hover {
     border-color: var(--accent-blue);
     color: var(--accent-blue);
-    border-style: solid; // Devient plein au survol pour plus de clarté
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    filter: grayscale(1);
-  }
-
-  // Petit indicateur "+" avant le texte si nécessaire via CSS
-  &::before {
-    content: '+';
-    font-size: 1.1rem;
-    font-weight: bold;
+    background: rgba(var(--accent-blue-rgb), 0.02);
   }
 }
 
-// Style spécifique lorsqu'il est dans le bloc global
-.global-student-comment {
-  .btn-add-comment {
-    background: transparent;
-    min-height: 60px; // Plus grand pour le commentaire général
-    font-weight: 500;
-  }
-}
 
-// Wrapper qui entoure le bouton ou le texte affiché
-.comment-display-wrapper {
-  width: 100%;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: background 0.2s;
-
-  &:hover:not(.disabled) {
-    background: rgba(255, 255, 255, 0.03);
-  }
-
-  &.global-preview {
-    margin-top: 0.5rem;
-  }
+.btn-secondary{
+  @include btn-primary-base;
 }
