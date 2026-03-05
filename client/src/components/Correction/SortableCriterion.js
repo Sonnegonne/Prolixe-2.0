@@ -1,18 +1,18 @@
-import React from 'react';
+import React, { memo, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Trash2, Plus, List } from 'lucide-react';
 
-const SortableCriterion = ({
-                               id,
-                               criterion,
-                               index,
-                               onUpdate,
-                               onRemove,
-                               sections = [],
-                               isCustomSection,
-                               setCustomSection,
-                           }) => {
+const SortableCriterion = memo(({
+                                    id,
+                                    criterion,
+                                    index,
+                                    onUpdate,
+                                    onRemove,
+                                    sections = [],
+                                    isCustomSection,
+                                    setCustomSection,
+                                }) => {
     const {
         attributes,
         listeners,
@@ -29,6 +29,16 @@ const SortableCriterion = ({
         zIndex: isDragging ? 100 : 1,
     };
 
+    const handleNameChange = useCallback((e) => onUpdate(index, 'name', e.target.value), [index, onUpdate]);
+    const handlePointsChange = useCallback((e) => onUpdate(index, 'max_points', e.target.value), [index, onUpdate]);
+    const handleSectionChange = useCallback((e) => onUpdate(index, 'section_name', e.target.value), [index, onUpdate]);
+    const handleRemove = useCallback(() => onRemove(index), [index, onRemove]);
+    const handleSwitchToSelect = useCallback(() => setCustomSection(id, false), [id, setCustomSection]);
+    const handleSwitchToInput = useCallback(() => {
+        onUpdate(index, 'section_name', '');
+        setCustomSection(id, true);
+    }, [id, index, onUpdate, setCustomSection]);
+
     return (
         <div ref={setNodeRef} style={style} className="sortable-criterion-item">
             <div className="drag-handle" {...attributes} {...listeners}>
@@ -44,14 +54,14 @@ const SortableCriterion = ({
                                 type="text"
                                 placeholder="Nom de la section..."
                                 value={criterion.section_name || ''}
-                                onChange={(e) => onUpdate(index, 'section_name', e.target.value)}
+                                onChange={handleSectionChange}
                                 className="input-text-custom"
                             />
                             {sections.length > 0 && (
                                 <button
                                     type="button"
                                     className="toggle-btn"
-                                    onClick={() => setCustomSection(false)}
+                                    onClick={handleSwitchToSelect}
                                     title="Choisir une section existante"
                                 >
                                     <List size={14} />
@@ -62,7 +72,7 @@ const SortableCriterion = ({
                         <div className="input-with-toggle">
                             <select
                                 value={criterion.section_name}
-                                onChange={(e) => onUpdate(index, 'section_name', e.target.value)}
+                                onChange={handleSectionChange}
                                 className="select-section"
                             >
                                 <option value="" disabled>Choisir...</option>
@@ -73,10 +83,7 @@ const SortableCriterion = ({
                             <button
                                 type="button"
                                 className="toggle-btn"
-                                onClick={() => {
-                                    onUpdate(index, 'section_name', '');
-                                    setCustomSection(true);
-                                }}
+                                onClick={handleSwitchToInput}
                                 title="Créer une nouvelle section"
                             >
                                 <Plus size={14} />
@@ -91,7 +98,7 @@ const SortableCriterion = ({
                         type="text"
                         placeholder="Critère (ex: Orthographe...)"
                         value={criterion.name}
-                        onChange={(e) => onUpdate(index, 'name', e.target.value)}
+                        onChange={handleNameChange}
                         className="input-name"
                     />
                 </div>
@@ -104,7 +111,7 @@ const SortableCriterion = ({
                         min="0"
                         placeholder="Pts"
                         value={criterion.max_points}
-                        onChange={(e) => onUpdate(index, 'max_points', e.target.value)}
+                        onChange={handlePointsChange}
                         className="input-points"
                     />
                 </div>
@@ -113,7 +120,7 @@ const SortableCriterion = ({
                 <button
                     type="button"
                     className="btn-delete-criterion"
-                    onClick={() => onRemove(index)}
+                    onClick={handleRemove}
                     title="Supprimer ce critère"
                 >
                     <Trash2 size={18} />
@@ -121,6 +128,8 @@ const SortableCriterion = ({
             </div>
         </div>
     );
-};
+});
+
+SortableCriterion.displayName = 'SortableCriterion';
 
 export default SortableCriterion;

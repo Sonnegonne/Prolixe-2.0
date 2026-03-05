@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, Plus, Save } from 'lucide-react';
 import { useJournal } from '../../hooks/useJournal';
 import ClassService from '../../services/ClassService';
@@ -35,7 +35,6 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
         criteria: []
     });
 
-    // isCustomSection géré ici (par tempId) pour éviter les re-renders qui font perdre le focus
     const [customSectionFlags, setCustomSectionFlags] = useState({});
 
     const sensors = useSensors(
@@ -44,66 +43,64 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
     );
 
     useEffect(() => {
-        if (isOpen && currentJournal?.id) {
-            ClassService.getClasses(currentJournal.id)
-                .then(res => setClasses(res.data.data))
-                .catch(err => console.error("Erreur chargement classes", err));
+        if (!isOpen || !currentJournal?.id) return;
 
-            loadSubjects(currentJournal.id);
+        ClassService.getClasses(currentJournal.id)
+            .then(res => setClasses(res.data.data))
+            .catch(err => console.error("Erreur chargement classes", err));
 
-            if (evaluation) {
-                const mappedCriteria = (evaluation.criteria || []).map(c => ({
-                    ...c,
-                    name: c.name || c.label || '',
-                    max_points: c.max_points ?? c.max_score ?? 0,
-                    section_name: c.section_name || 'Général',
-                    tempId: Math.random().toString(36).substr(2, 9)
-                }));
-                setFormData({
-                    ...evaluation,
-                    subject_id: evaluation.subject_id || '',
-                    evaluation_date: evaluation.evaluation_date
-                        ? evaluation.evaluation_date.split('T')[0]
-                        : new Date().toISOString().split('T')[0],
-                    criteria: mappedCriteria
-                });
-                // Édition : critères existants → mode select
-                const flags = {};
-                mappedCriteria.forEach(c => { flags[c.tempId] = false; });
-                setCustomSectionFlags(flags);
+        loadSubjects(currentJournal.id);
 
-            } else if (evaluationToCopy) {
-                const mappedCriteria = evaluationToCopy.criteria.map(c => ({
-                    ...c,
-                    id: null,
-                    tempId: Math.random().toString(36).substr(2, 9)
-                }));
-                setFormData({
-                    ...evaluationToCopy,
-                    id: null,
-                    subject_id: evaluationToCopy.subject_id || '',
-                    title: `${evaluationToCopy.title} (Copie)`,
-                    evaluation_date: new Date().toISOString().split('T')[0],
-                    criteria: mappedCriteria
-                });
-                const flags = {};
-                mappedCriteria.forEach(c => { flags[c.tempId] = false; });
-                setCustomSectionFlags(flags);
+        if (evaluation) {
+            const mappedCriteria = (evaluation.criteria || []).map(c => ({
+                ...c,
+                name: c.name || c.label || '',
+                max_points: c.max_points ?? c.max_score ?? 0,
+                section_name: c.section_name || 'Général',
+                tempId: Math.random().toString(36).substr(2, 9)
+            }));
+            const flags = {};
+            mappedCriteria.forEach(c => { flags[c.tempId] = false; });
+            setFormData({
+                ...evaluation,
+                subject_id: evaluation.subject_id || '',
+                evaluation_date: evaluation.evaluation_date
+                    ? evaluation.evaluation_date.split('T')[0]
+                    : new Date().toISOString().split('T')[0],
+                criteria: mappedCriteria
+            });
+            setCustomSectionFlags(flags);
 
-            } else {
-                const initTempId = 'init-1';
-                setFormData({
-                    title: '',
-                    class_id: '',
-                    subject_id: '',
-                    evaluation_date: new Date().toISOString().split('T')[0],
-                    max_score: 20,
-                    folder: '',
-                    criteria: [{ tempId: initTempId, name: '', section_name: 'Général', max_points: 5 }]
-                });
-                // Création : mode input libre par défaut
-                setCustomSectionFlags({ [initTempId]: true });
-            }
+        } else if (evaluationToCopy) {
+            const mappedCriteria = evaluationToCopy.criteria.map(c => ({
+                ...c,
+                id: null,
+                tempId: Math.random().toString(36).substr(2, 9)
+            }));
+            const flags = {};
+            mappedCriteria.forEach(c => { flags[c.tempId] = false; });
+            setFormData({
+                ...evaluationToCopy,
+                id: null,
+                subject_id: evaluationToCopy.subject_id || '',
+                title: `${evaluationToCopy.title} (Copie)`,
+                evaluation_date: new Date().toISOString().split('T')[0],
+                criteria: mappedCriteria
+            });
+            setCustomSectionFlags(flags);
+
+        } else {
+            const initTempId = 'init-1';
+            setFormData({
+                title: '',
+                class_id: '',
+                subject_id: '',
+                evaluation_date: new Date().toISOString().split('T')[0],
+                max_score: 20,
+                folder: '',
+                criteria: [{ tempId: initTempId, name: '', section_name: 'Général', max_points: 5 }]
+            });
+            setCustomSectionFlags({ [initTempId]: true });
         }
     }, [isOpen, evaluation, evaluationToCopy, currentJournal]);
 
@@ -113,17 +110,12 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
         }
     }, [subjects, evaluation, evaluationToCopy]);
 
-    const handleDragEnd = (event) => {
-        const { active, over } = event;
-        if (active && over && active.id !== over.id) {
-            setFormData(prev => {
-                const oldIndex = prev.criteria.findIndex(c => c.tempId === active.id);
-                const newIndex = prev.criteria.findIndex(c => c.tempId === over.id);
-                return { ...prev, criteria: arrayMove(prev.criteria, oldIndex, newIndex) };
-            });
-        }
-    };
+    // Mémoïsé : ne change que quand les section_name changent réellement
+    const existingSections = useMemo(() => Array.from(
+        new Set(formData.criteria.map(c => c.section_name).filter(name => name?.trim()))
+    ), [formData.criteria.map(c => c.section_name).join('|')]);
 
+    // Mémoïsé : ne change jamais de référence
     const updateCriterion = useCallback((index, field, value) => {
         setFormData(prev => ({
             ...prev,
@@ -133,7 +125,22 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
         }));
     }, []);
 
-    const addObjective = () => {
+    const setCustomFlag = useCallback((tempId, value) => {
+        setCustomSectionFlags(prev => ({ ...prev, [tempId]: value }));
+    }, []);
+
+    const handleDragEnd = useCallback((event) => {
+        const { active, over } = event;
+        if (active && over && active.id !== over.id) {
+            setFormData(prev => {
+                const oldIndex = prev.criteria.findIndex(c => c.tempId === active.id);
+                const newIndex = prev.criteria.findIndex(c => c.tempId === over.id);
+                return { ...prev, criteria: arrayMove(prev.criteria, oldIndex, newIndex) };
+            });
+        }
+    }, []);
+
+    const addObjective = useCallback(() => {
         const newTempId = Math.random().toString(36).substr(2, 9);
         setFormData(prev => ({
             ...prev,
@@ -143,9 +150,9 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
             ]
         }));
         setCustomSectionFlags(prev => ({ ...prev, [newTempId]: true }));
-    };
+    }, []);
 
-    const removeCriterion = (index) => {
+    const removeCriterion = useCallback((index) => {
         setFormData(prev => {
             const removed = prev.criteria[index];
             setCustomSectionFlags(flags => {
@@ -155,17 +162,16 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
             });
             return { ...prev, criteria: prev.criteria.filter((_, i) => i !== index) };
         });
-    };
-
-    const setCustomFlag = useCallback((tempId, value) => {
-        setCustomSectionFlags(prev => ({ ...prev, [tempId]: value }));
     }, []);
 
-    if (!isOpen) return null;
+    const handleSave = useCallback(() => {
+        onSave({ ...formData, journal_id: currentJournal.id });
+    }, [formData, currentJournal, onSave]);
 
-    const existingSections = Array.from(
-        new Set(formData.criteria.map(c => c.section_name).filter(name => name && name.trim() !== ""))
-    );
+    // Mémoïsé : évite de recréer le tableau d'IDs à chaque render
+    const criteriaIds = useMemo(() => formData.criteria.map(c => c.tempId), [formData.criteria]);
+
+    if (!isOpen) return null;
 
     return (
         <div className="modal-overlay">
@@ -181,7 +187,7 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
                             <label>Titre</label>
                             <input
                                 value={formData.title}
-                                onChange={e => setFormData({ ...formData, title: e.target.value })}
+                                onChange={e => setFormData(prev => ({ ...prev, title: e.target.value }))}
                                 placeholder="ex: Contrôle n°1"
                             />
                         </div>
@@ -189,18 +195,17 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
                             <label>Classe</label>
                             <select
                                 value={formData.class_id}
-                                onChange={e => setFormData({ ...formData, class_id: e.target.value })}
+                                onChange={e => setFormData(prev => ({ ...prev, class_id: e.target.value }))}
                             >
                                 <option value="">Sélectionner...</option>
                                 {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                         </div>
-
                         <div className="form-group">
                             <label>Matière</label>
                             <select
                                 value={formData.subject_id}
-                                onChange={e => setFormData({ ...formData, subject_id: e.target.value })}
+                                onChange={e => setFormData(prev => ({ ...prev, subject_id: e.target.value }))}
                                 required
                             >
                                 <option value="">Choisir une matière...</option>
@@ -209,12 +214,11 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
                                 ))}
                             </select>
                         </div>
-
                         <div className="form-group">
                             <label>Dossier / Période</label>
                             <input
                                 value={formData.folder}
-                                onChange={e => setFormData({ ...formData, folder: e.target.value })}
+                                onChange={e => setFormData(prev => ({ ...prev, folder: e.target.value }))}
                                 placeholder="ex: T1 ou Chapitre 1"
                             />
                         </div>
@@ -223,7 +227,7 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
                             <input
                                 type="date"
                                 value={formData.evaluation_date}
-                                onChange={e => setFormData({ ...formData, evaluation_date: e.target.value })}
+                                onChange={e => setFormData(prev => ({ ...prev, evaluation_date: e.target.value }))}
                             />
                         </div>
                     </div>
@@ -241,10 +245,7 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
                             collisionDetection={closestCenter}
                             onDragEnd={handleDragEnd}
                         >
-                            <SortableContext
-                                items={formData.criteria.map(c => c.tempId)}
-                                strategy={verticalListSortingStrategy}
-                            >
+                            <SortableContext items={criteriaIds} strategy={verticalListSortingStrategy}>
                                 <div className="sortable-list">
                                     {formData.criteria.map((c, index) => (
                                         <SortableCriterion
@@ -256,7 +257,7 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
                                             onRemove={removeCriterion}
                                             sections={existingSections}
                                             isCustomSection={customSectionFlags[c.tempId] ?? true}
-                                            setCustomSection={(value) => setCustomFlag(c.tempId, value)}
+                                            setCustomSection={setCustomFlag}
                                         />
                                     ))}
                                 </div>
@@ -267,10 +268,7 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
 
                 <div className="modal-footer">
                     <button className="btn-cancel" onClick={onClose}>Annuler</button>
-                    <button
-                        className="btn-save"
-                        onClick={() => onSave({ ...formData, journal_id: currentJournal.id })}
-                    >
+                    <button className="btn-save" onClick={handleSave}>
                         <Save size={18} /> Enregistrer
                     </button>
                 </div>
