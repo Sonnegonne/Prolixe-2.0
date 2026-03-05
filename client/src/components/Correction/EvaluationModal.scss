@@ -1,80 +1,295 @@
 @import '../../App.scss';
 
-.modal-overlay {
-  @include modal-overlay-base;
-}
-
-.modal {
-  @include modal-base;
-  max-width: 45rem;
-
-  .class-form {
-    padding: 1.5rem;
-  }
-
-  h4 {
-    margin-top: 2rem;
-    margin-bottom: 1rem;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 0.5rem;
-  }
-
-  .criterion-row {
-    display: flex;
-    gap: 1rem;
-    align-items: center;
-    flex-direction: row;
-    margin-bottom: 1rem;
-
-    input[type="text"] {
-      flex-grow: 1;
-    }
-
-    input[type="number"] {
-      width: 5rem;
-    }
-
-    .btn-delete {
-      @include btn-danger-base;
-      padding: 0.5rem;
-      font-size: 1rem;
-      width: 40px;
-      height: 40px;
-      line-height: 1;
-    }
-  }
-
-  .btn-add-criterion {
-    @include btn-secondary-base;
-    margin-top: 0.5rem;
-    margin-bottom: 1.5rem;
-    width: 100%;
-    background: var(--blue-transparent-sm);
-    color: var(--accent-blue);
-    border: 1px solid var(--accent-blue);
-
-    &:hover {
-      background: var(--blue-transparent-lg);
-    }
-  }
-
-  .form-actions {
-    @include modal-form-actions-base;
-  }
-
-  .modal-close {
-    @include modal-close-btn-base;
-    background: none; /* Override de fond */
-    border: none; /* Override de bordure */
-    color: #9ca3af; /* Couleur spécifique */
-
-    &:hover {
-      background: var(--red-transparent-sm);
-      color: var(--red-danger);
-    }
-  }
+.evaluation-modal {
+  @include card-base;
+  max-width: 1000px; // Légèrement élargi pour accommoder les 3 colonnes de critères
+  width: 95%;
+  background: var(--bg-dark-secondary);
+  border: 1px solid var(--border-color);
+  backdrop-filter: blur(10px);
+  padding: 0;
+  overflow: hidden;
 
   .modal-header {
-    @include modal-header-base;
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    h2 {
+      @include section-title-h1;
+      margin: 0;
+      font-size: 1.5rem;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: color 0.2s;
+      &:hover { color: var(--text-light); }
+    }
+  }
+
+  .modal-body {
+    padding: 2rem;
+    max-height: 70vh;
+    overflow-y: auto;
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+
+      label {
+        color: var(--accent-cyan);
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+      }
+
+      input, select {
+        background: var(--bg-dark-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        color: var(--text-light);
+        font-size: 1rem;
+
+        &:focus {
+          outline: none;
+          border-color: var(--accent-cyan);
+          box-shadow: 0 0 0 2px rgba(var(--accent-cyan-rgb), 0.2);
+        }
+
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+      }
+    }
+  }
+
+  .criteria-section-editor {
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border-color-light);
+
+      h3 { color: var(--text-light); margin: 0; font-size: 1.1rem; }
+
+      .btn-add-crit {
+        @include btn-secondary-base;
+        font-size: 0.85rem;
+        padding: 0.5rem 1rem;
+        border: 1px dashed var(--accent-cyan);
+        background: transparent;
+        color: var(--accent-cyan);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+
+        &:hover {
+          background: rgba(var(--accent-cyan-rgb), 0.1);
+          border-style: solid;
+        }
+      }
+    }
+  }
+
+  // --- STYLE DES LIGNES DE CRITÈRES (DRAG & DROP) ---
+  .sortable-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .sortable-criterion-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: var(--bg-dark-tertiary);
+    border: 1px solid var(--border-color);
+    padding: 0.5rem 1rem;
+    border-radius: 0.75rem;
+    transition: transform 0.1s, box-shadow 0.2s;
+
+    &:hover { border-color: var(--text-muted); }
+
+    .drag-handle {
+      cursor: grab;
+      color: var(--text-muted);
+      display: flex;
+      padding: 0.5rem 0;
+      &:active { cursor: grabbing; }
+      &:hover { color: var(--accent-cyan); }
+    }
+
+    .criterion-inputs-row {
+      display: flex;
+      flex: 1;
+      align-items: center;
+      gap: 1rem;
+
+      // Style commun pour les champs internes
+      input, select {
+        background: transparent;
+        border: none;
+        border-bottom: 1px solid transparent;
+        color: var(--text-light);
+        padding: 0.5rem;
+        font-size: 0.95rem;
+
+        &:focus {
+          outline: none;
+          border-bottom-color: var(--accent-cyan);
+        }
+      }
+
+      // Champ Section (le plus complexe avec le toggle)
+      // Champ Section (Spécifique)
+      .section-field {
+        width: 200px;
+
+        .input-with-toggle {
+          display: flex;
+          align-items: center;
+          border-radius: 0.4rem;
+          // Bordure plus visible pour marquer l'interactivité
+          border: 1px solid rgba(var(--accent-orange-rgb), 0.3);
+          background: var(--bg-dark-secondary); // Fond de base
+          overflow: hidden;
+          transition: all 0.2s ease;
+
+          &:hover {
+            border-color: var(--accent-orange);
+            // Effet d'élévation au survol
+            background: rgba(255, 255, 255, 0.05);
+          }
+
+          &:focus-within {
+            border-color: var(--accent-orange);
+            box-shadow: 0 0 0 1px rgba(var(--accent-orange-rgb), 0.2);
+          }
+
+          // Style spécifique quand c'est un SELECT (Mode Liste)
+          .select-section {
+            flex: 1;
+            border: none;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--accent-orange);
+            // Fond légèrement "bouton" pour le select
+            background: linear-gradient(to bottom, rgba(255,255,255,0.05), transparent);
+            padding: 0.45rem 0.6rem;
+            cursor: pointer;
+            width: 100%;
+            // On ajoute une petite bordure gauche pour le style "Input spécial"
+            border-left: 3px solid var(--accent-orange);
+
+            &:focus { outline: none; }
+
+            option {
+              background: var(--bg-dark-secondary);
+              color: var(--text-light);
+            }
+          }
+
+          // Style quand c'est un INPUT (Mode Libre)
+          .input-text-custom {
+            flex: 1;
+            border: none;
+            background: transparent;
+            color: var(--accent-orange);
+            font-weight: 700;
+            padding: 0.45rem 0.6rem;
+            // Bordure gauche différente (ex: en pointillés ou plus fine)
+            // pour montrer que c'est de l'édition libre
+            border-left: 3px solid rgba(var(--accent-orange-rgb), 0.3);
+          }
+
+          .toggle-btn {
+            background: rgba(var(--accent-orange-rgb), 0.1);
+            border: none;
+            border-left: 1px solid rgba(var(--accent-orange-rgb), 0.2);
+            color: var(--accent-orange);
+            padding: 0.5rem;
+            height: 100%; // Pour bien remplir la hauteur
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            transition: all 0.2s;
+
+            &:hover {
+              background: var(--accent-orange);
+              color: var(--bg-dark-primary);
+            }
+          }
+        }
+      }
+
+      // Champ Nom du critère
+      .name-field {
+        flex: 1;
+        .input-name {
+          width: 100%;
+          border-bottom: 1px solid var(--border-color);
+        }
+      }
+
+      // Champ Points
+      .points-field {
+        width: 80px;
+        .input-points {
+          width: 100%;
+          text-align: center;
+          background: rgba(var(--accent-cyan-rgb), 0.05);
+          border: 1px solid var(--border-color);
+          border-radius: 0.4rem;
+          color: var(--accent-cyan);
+          font-weight: bold;
+        }
+      }
+    }
+
+    .btn-delete-criterion {
+      color: var(--red-danger);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.6rem;
+      border-radius: 0.5rem;
+      display: flex;
+      align-items: center;
+      transition: all 0.2s;
+
+      &:hover {
+        background: var(--red-transparent-sm);
+        transform: scale(1.1);
+      }
+    }
+  }
+
+  .modal-footer {
+    padding: 1.5rem 2rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+
+    .btn-cancel { @include btn-secondary-base; }
+    .btn-save { @include btn-primary-base; }
   }
 }

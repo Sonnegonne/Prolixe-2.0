@@ -13,7 +13,6 @@ import { getEvaluationForGrading, saveGrades } from '../../services/EvaluationSe
 import { useToast } from '../../hooks/useToast';
 import './CorrectionView.scss';
 
-// Sous-composant pour l'affichage riche des commentaires
 const CommentDisplay = ({ text }) => {
     if (!text) return null;
     const parts = text.split(/(\/\*[\s\S]*?\*\/)/g).filter(Boolean);
@@ -47,8 +46,6 @@ const CorrectionView = () => {
 
     const [editingCommentKey, setEditingCommentKey] = useState(null);
     const [absentStudents, setAbsentStudents] = useState(new Set());
-
-    // --- LOGIQUE DE DONNÉES ---
 
     const fetchData = useCallback(async () => {
         if (!evaluationId) return;
@@ -87,6 +84,17 @@ const CorrectionView = () => {
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
+    // Groupement des critères par section (ordre d'apparition préservé)
+    const groupedCriteria = useMemo(() => {
+        const groups = {};
+        criteria.forEach(c => {
+            const section = c.section_name || 'Général';
+            if (!groups[section]) groups[section] = [];
+            groups[section].push(c);
+        });
+        return groups;
+    }, [criteria]);
+
     const studentTotals = useMemo(() => {
         const totals = {};
         students.forEach(student => {
@@ -106,8 +114,6 @@ const CorrectionView = () => {
         });
         return totals;
     }, [students, criteria, grades, absentStudents]);
-
-    // --- ACTIONS ---
 
     const prepareStudentPayload = useCallback((studentId) => {
         const isAbsent = absentStudents.has(studentId);
@@ -259,46 +265,53 @@ const CorrectionView = () => {
                             <ClipboardList size={16} />
                             <h4>Critères d'évaluation</h4>
                         </div>
-                        {criteria.map(criterion => {
-                            const key = `${selectedStudentId}-${criterion.id}`;
-                            const gradeInfo = grades[key] || { score: '', comment: '' };
-                            const isEditing = editingCommentKey === key;
 
-                            return (
-                                <div className={`criterion-row ${isSelectedStudentAbsent ? 'disabled' : ''}`} key={criterion.id}>
-                                    <div className="criterion-main">
-                                        <span className="criterion-name">{criterion.name}</span>
-                                        <div className="grade-input-group">
-                                            <input
-                                                type="number"
-                                                step="0.25"
-                                                value={isSelectedStudentAbsent ? '' : gradeInfo.score ?? ''}
-                                                disabled={isSelectedStudentAbsent}
-                                                onChange={(e) => handleGradeChange(selectedStudentId, criterion.id, e.target.value, criterion.max_points)}
-                                            />
-                                            <span className="max-points">/ {criterion.max_points}</span>
-                                        </div>
-                                    </div>
+                        {Object.entries(groupedCriteria).map(([section, sectionCriteria]) => (
+                            <div key={section} className="criteria-section">
+                                <h4 className="section-divider">{section}</h4>
 
-                                    <div className="criterion-comment">
-                                        {isEditing ? (
-                                            <textarea
-                                                autoFocus
-                                                value={gradeInfo.comment}
-                                                onBlur={() => setEditingCommentKey(null)}
-                                                onChange={(e) => setGrades(prev => ({
-                                                    ...prev, [key]: { ...prev[key], comment: e.target.value }
-                                                }))}
-                                            />
-                                        ) : (
-                                            <div className="comment-preview" onClick={() => !isSelectedStudentAbsent && setEditingCommentKey(key)}>
-                                                {gradeInfo.comment ? <CommentDisplay text={gradeInfo.comment} /> : <span>+ Commentaire critère</span>}
+                                {sectionCriteria.map(criterion => {
+                                    const key = `${selectedStudentId}-${criterion.id}`;
+                                    const gradeInfo = grades[key] || { score: '', comment: '' };
+                                    const isEditing = editingCommentKey === key;
+
+                                    return (
+                                        <div className={`criterion-row ${isSelectedStudentAbsent ? 'disabled' : ''}`} key={criterion.id}>
+                                            <div className="criterion-main">
+                                                <span className="criterion-name">{criterion.name}</span>
+                                                <div className="grade-input-group">
+                                                    <input
+                                                        type="number"
+                                                        step="0.25"
+                                                        value={isSelectedStudentAbsent ? '' : gradeInfo.score ?? ''}
+                                                        disabled={isSelectedStudentAbsent}
+                                                        onChange={(e) => handleGradeChange(selectedStudentId, criterion.id, e.target.value, criterion.max_points)}
+                                                    />
+                                                    <span className="max-points">/ {criterion.max_points}</span>
+                                                </div>
                                             </div>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
+
+                                            <div className="criterion-comment">
+                                                {isEditing ? (
+                                                    <textarea
+                                                        autoFocus
+                                                        value={gradeInfo.comment}
+                                                        onBlur={() => setEditingCommentKey(null)}
+                                                        onChange={(e) => setGrades(prev => ({
+                                                            ...prev, [key]: { ...prev[key], comment: e.target.value }
+                                                        }))}
+                                                    />
+                                                ) : (
+                                                    <div className="comment-preview" onClick={() => !isSelectedStudentAbsent && setEditingCommentKey(key)}>
+                                                        {gradeInfo.comment ? <CommentDisplay text={gradeInfo.comment} /> : <span>+ Commentaire critère</span>}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ))}
                     </div>
 
                     <div className="navigation-footer">

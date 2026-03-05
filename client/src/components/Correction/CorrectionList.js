@@ -76,16 +76,29 @@ const CorrectionList = () => {
         setIsModalOpen(true);
     };
 
-    const handleOpenCopyModal = (ev) => {
-        setEditingEvaluation(null);
-        setEvaluationToCopy(ev);
-        setIsModalOpen(true);
+    const handleOpenCopyModal = async (ev) => {
+        try {
+            const { data } = await getEvaluationForGrading(ev.id);
+            const { evaluation, criteria } = data.data;
+            setEditingEvaluation(null);
+            setEvaluationToCopy({ ...evaluation, criteria });
+            setIsModalOpen(true);
+        } catch (err) {
+            showError('Impossible de charger les détails de l\'évaluation.');
+        }
     };
 
-    const handleOpenEditModal = (ev) => {
-        setEditingEvaluation(ev);
-        setEvaluationToCopy(null);
-        setIsModalOpen(true);
+    // ✅ CORRECTIF : on charge les critères via getEvaluationForGrading avant d'ouvrir le modal
+    const handleOpenEditModal = async (ev) => {
+        try {
+            const { data } = await getEvaluationForGrading(ev.id);
+            const { evaluation, criteria } = data.data;
+            setEditingEvaluation({ ...evaluation, criteria });
+            setEvaluationToCopy(null);
+            setIsModalOpen(true);
+        } catch (err) {
+            showError('Impossible de charger les détails de l\'évaluation.');
+        }
     };
 
     const handleDeleteClick = (ev) => {
@@ -129,13 +142,9 @@ const CorrectionList = () => {
         const loadingToastId = info(`Exportation de "${evaluationName}" en cours...`, 60000);
 
         try {
-            // 1. Récupération des données via le service API
             let { data } = await getEvaluationForGrading(evaluationId);
             const { evaluation, students, criteria, grades } = data.data;
-
-            // 2. Appel au nouveau service d'exportation déporté
             await generateEvaluationPDF(evaluation, students, criteria, grades);
-
             removeToast(loadingToastId);
             success('PDF exporté avec succès !');
         } catch (err) {

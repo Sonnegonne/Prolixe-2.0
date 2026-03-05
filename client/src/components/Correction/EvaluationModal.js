@@ -1,228 +1,279 @@
-import React, { useState, useEffect } from 'react';
-import { useClasses } from '../../hooks/useClasses';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, Plus, Save } from 'lucide-react';
 import { useJournal } from '../../hooks/useJournal';
-import { getEvaluationTemplates, getEvaluationById } from '../../services/EvaluationService';
-import { useToast } from '../../hooks/useToast';
+import ClassService from '../../services/ClassService';
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy
+} from '@dnd-kit/sortable';
+import SortableCriterion from './SortableCriterion';
 import './EvaluationModal.scss';
-import { TextField, MenuItem, Select, FormControl, InputLabel } from "@mui/material";
-import {useSubjects} from "../../hooks/useSubjects";
+import { useSubjects } from "../../hooks/useSubjects";
 
 const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy }) => {
     const { currentJournal } = useJournal();
-    const journalId = currentJournal?.id;
-    const { classes } = useClasses(journalId);
-    const { error: showError } = useToast();
-    const { subjects, loadSubjects, loading: loadingSubs } = useSubjects();
+    const [classes, setClasses] = useState([]);
+    const { subjects, loadSubjects } = useSubjects();
+
+    const [formData, setFormData] = useState({
+        title: '',
+        class_id: '',
+        subject_id: '',
+        evaluation_date: new Date().toISOString().split('T')[0],
+        max_score: 20,
+        folder: '',
+        criteria: []
+    });
+
+    // isCustomSection géré ici (par tempId) pour éviter les re-renders qui font perdre le focus
+    const [customSectionFlags, setCustomSectionFlags] = useState({});
+
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
 
     useEffect(() => {
-        if (isOpen && journalId) {
-            loadSubjects(journalId);
-        }
-    }, [isOpen, journalId, loadSubjects]);
+        if (isOpen && currentJournal?.id) {
+            ClassService.getClasses(currentJournal.id)
+                .then(res => setClasses(res.data.data))
+                .catch(err => console.error("Erreur chargement classes", err));
 
+            loadSubjects(currentJournal.id);
 
-    // États du formulaire
-    const [name, setName] = useState('');
-    const [classId, setClassId] = useState('');
-    const [subjectId, setSubjectId] = useState(''); // Ajout de l'état pour la matière
-    const [date, setDate] = useState('');
-    const [criteria, setCriteria] = useState([{ label: '', max_score: '' }]);
-    const [folder, setFolder] = useState('');
+            if (evaluation) {
+                const mappedCriteria = (evaluation.criteria || []).map(c => ({
+                    ...c,
+                    name: c.name || c.label || '',
+                    max_points: c.max_points ?? c.max_score ?? 0,
+                    section_name: c.section_name || 'Général',
+                    tempId: Math.random().toString(36).substr(2, 9)
+                }));
+                setFormData({
+                    ...evaluation,
+                    subject_id: evaluation.subject_id || '',
+                    evaluation_date: evaluation.evaluation_date
+                        ? evaluation.evaluation_date.split('T')[0]
+                        : new Date().toISOString().split('T')[0],
+                    criteria: mappedCriteria
+                });
+                // Édition : critères existants → mode select
+                const flags = {};
+                mappedCriteria.forEach(c => { flags[c.tempId] = false; });
+                setCustomSectionFlags(flags);
 
-    const [isSaving, setIsSaving] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
-    const [templates, setTemplates] = useState([]);
-    const [selectedTemplateId, setSelectedTemplateId] = useState('');
+            } else if (evaluationToCopy) {
+                const mappedCriteria = evaluationToCopy.criteria.map(c => ({
+                    ...c,
+                    id: null,
+                    tempId: Math.random().toString(36).substr(2, 9)
+                }));
+                setFormData({
+                    ...evaluationToCopy,
+                    id: null,
+                    subject_id: evaluationToCopy.subject_id || '',
+                    title: `${evaluationToCopy.title} (Copie)`,
+                    evaluation_date: new Date().toISOString().split('T')[0],
+                    criteria: mappedCriteria
+                });
+                const flags = {};
+                mappedCriteria.forEach(c => { flags[c.tempId] = false; });
+                setCustomSectionFlags(flags);
 
-    useEffect(() => {
-        if (!isOpen) {
-            setName('');
-            setClassId('');
-            setSubjectId('');
-            setDate('');
-            setCriteria([{ label: '', max_score: '' }]);
-            setSelectedTemplateId('');
-            setTemplates([]);
-            setIsLoading(false);
-            setFolder('');
-        }
-    }, [isOpen]);
-
-    useEffect(() => {
-        if (!isOpen) return;
-
-        const loadData = async () => {
-            setIsLoading(true);
-            try {
-                if (evaluation || evaluationToCopy) {
-                    const targetId = evaluation?.id || evaluationToCopy?.id;
-                    const response = await getEvaluationById(targetId);
-                    const data = response.data.data;
-
-                    setName(evaluationToCopy ? `Copie de ${data.title}` : data.title);
-                    setClassId(data.class_id);
-                    setSubjectId(data.subject_id || ''); // Charger la matière existante
-                    setFolder(data.folder || '');
-                    setDate(evaluation ? new Date(data.evaluation_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
-
-                    if (data.criteria?.length > 0) {
-                        setCriteria(data.criteria.map(c => ({
-                            id: evaluation ? c.id : null,
-                            label: c.name,
-                            max_score: c.max_points
-                        })));
-                    }
-                } else {
-                    const response = await getEvaluationTemplates();
-                    setTemplates(response.data.data || []);
-                    setDate(new Date().toISOString().split('T')[0]);
-                    // Par défaut, si le journal n'a qu'une matière, on la sélectionne
-                    if (subjects.length === 1) setSubjectId(subjects[0].id);
-                }
-            } catch (err) {
-                showError("Erreur lors du chargement.");
-            } finally {
-                setIsLoading(false);
+            } else {
+                const initTempId = 'init-1';
+                setFormData({
+                    title: '',
+                    class_id: '',
+                    subject_id: '',
+                    evaluation_date: new Date().toISOString().split('T')[0],
+                    max_score: 20,
+                    folder: '',
+                    criteria: [{ tempId: initTempId, name: '', section_name: 'Général', max_points: 5 }]
+                });
+                // Création : mode input libre par défaut
+                setCustomSectionFlags({ [initTempId]: true });
             }
-        };
-        loadData();
-    }, [isOpen, evaluation, evaluationToCopy, subjects.length]);
+        }
+    }, [isOpen, evaluation, evaluationToCopy, currentJournal]);
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!subjectId) return showError("Veuillez sélectionner une matière.");
+    useEffect(() => {
+        if (!evaluation && !evaluationToCopy && subjects.length === 1) {
+            setFormData(prev => ({ ...prev, subject_id: subjects[0].id }));
+        }
+    }, [subjects, evaluation, evaluationToCopy]);
 
-        setIsSaving(true);
-        const totalMaxScore = criteria.reduce((sum, c) => sum + parseFloat(c.max_score || 0), 0);
-
-        const payload = {
-            title: name,
-            class_id: classId,
-            journal_id: journalId,
-            subject_id: subjectId, // Envoi du subject_id indispensable
-            evaluation_date: date,
-            max_score: totalMaxScore,
-            global_comment: "",
-            folder: folder,
-            criteria: criteria
-                .filter(c => c.label && c.max_score)
-                .map((c, index) => ({
-                    id: c.id || null,
-                    name: c.label,
-                    max_points: parseFloat(c.max_score),
-                    display_order: index
-                }))
-        };
-
-        try {
-            await onSave(payload);
-            onClose();
-        } catch (err) {
-            showError("Erreur lors de la sauvegarde.");
-        } finally {
-            setIsSaving(false);
+    const handleDragEnd = (event) => {
+        const { active, over } = event;
+        if (active && over && active.id !== over.id) {
+            setFormData(prev => {
+                const oldIndex = prev.criteria.findIndex(c => c.tempId === active.id);
+                const newIndex = prev.criteria.findIndex(c => c.tempId === over.id);
+                return { ...prev, criteria: arrayMove(prev.criteria, oldIndex, newIndex) };
+            });
         }
     };
 
+    const updateCriterion = useCallback((index, field, value) => {
+        setFormData(prev => ({
+            ...prev,
+            criteria: prev.criteria.map((c, i) =>
+                i === index ? { ...c, [field]: value } : c
+            )
+        }));
+    }, []);
+
+    const addObjective = () => {
+        const newTempId = Math.random().toString(36).substr(2, 9);
+        setFormData(prev => ({
+            ...prev,
+            criteria: [
+                ...prev.criteria,
+                { tempId: newTempId, name: '', section_name: 'Général', max_points: 0 }
+            ]
+        }));
+        setCustomSectionFlags(prev => ({ ...prev, [newTempId]: true }));
+    };
+
+    const removeCriterion = (index) => {
+        setFormData(prev => {
+            const removed = prev.criteria[index];
+            setCustomSectionFlags(flags => {
+                const next = { ...flags };
+                delete next[removed.tempId];
+                return next;
+            });
+            return { ...prev, criteria: prev.criteria.filter((_, i) => i !== index) };
+        });
+    };
+
+    const setCustomFlag = useCallback((tempId, value) => {
+        setCustomSectionFlags(prev => ({ ...prev, [tempId]: value }));
+    }, []);
+
     if (!isOpen) return null;
+
+    const existingSections = Array.from(
+        new Set(formData.criteria.map(c => c.section_name).filter(name => name && name.trim() !== ""))
+    );
 
     return (
         <div className="modal-overlay">
-            <div className="modal">
+            <div className="modal-container evaluation-modal">
                 <div className="modal-header">
-                    <h3>{evaluation ? "Modifier" : evaluationToCopy ? "Copier" : "Nouvelle"} Évaluation</h3>
-                    <button className="modal-close" onClick={onClose}>×</button>
+                    <h2>{evaluation ? 'Modifier' : 'Créer'} l'évaluation</h2>
+                    <button className="close-btn" onClick={onClose}><X size={24} /></button>
                 </div>
 
-                {isLoading ? <div className="loading-modal">Chargement...</div> : (
-                    <form className="class-form" onSubmit={handleSubmit}>
-                        {!evaluation && !evaluationToCopy && (
-                            <div className="form-group">
-                                <label>Modèle</label>
-                                <select value={selectedTemplateId} onChange={(e) => setSelectedTemplateId(e.target.value)}>
-                                    <option value="">-- Partir de zéro --</option>
-                                    {templates.map(t => (
-                                        <option key={t.id} value={t.id}>{t.title} ({t.max_score} pts)</option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-
+                <div className="modal-body">
+                    <div className="form-grid">
                         <div className="form-group">
                             <label>Titre</label>
-                            <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
-                        </div>
-
-                        <div className="form-group">
-                            <label>Dossier / Catégorie</label>
                             <input
-                                type="text"
-                                value={folder}
-                                onChange={(e) => setFolder(e.target.value)}
-                                placeholder="Ex: Interrogations, Examens..."
+                                value={formData.title}
+                                onChange={e => setFormData({ ...formData, title: e.target.value })}
+                                placeholder="ex: Contrôle n°1"
                             />
                         </div>
-
-                        <div className="form-row">
-                            <div className="form-group">
-                                <label>Matière</label>
-                                <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)} required>
-                                    <option value="">-- Sélectionner --</option>
-                                    {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                </select>
-                            </div>
-                            <div className="form-group">
-                                <label>Classe</label>
-                                <select value={classId} onChange={(e) => setClassId(e.target.value)} required disabled={!!evaluation}>
-                                    <option value="">-- Choisir --</option>
-                                    {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                </select>
-                            </div>
+                        <div className="form-group">
+                            <label>Classe</label>
+                            <select
+                                value={formData.class_id}
+                                onChange={e => setFormData({ ...formData, class_id: e.target.value })}
+                            >
+                                <option value="">Sélectionner...</option>
+                                {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
                         </div>
 
                         <div className="form-group">
+                            <label>Matière</label>
+                            <select
+                                value={formData.subject_id}
+                                onChange={e => setFormData({ ...formData, subject_id: e.target.value })}
+                                required
+                            >
+                                <option value="">Choisir une matière...</option>
+                                {subjects.map(s => (
+                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="form-group">
+                            <label>Dossier / Période</label>
+                            <input
+                                value={formData.folder}
+                                onChange={e => setFormData({ ...formData, folder: e.target.value })}
+                                placeholder="ex: T1 ou Chapitre 1"
+                            />
+                        </div>
+                        <div className="form-group">
                             <label>Date</label>
-                            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+                            <input
+                                type="date"
+                                value={formData.evaluation_date}
+                                onChange={e => setFormData({ ...formData, evaluation_date: e.target.value })}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="criteria-section-editor">
+                        <div className="section-header">
+                            <h3>Structure des critères</h3>
+                            <button type="button" className="btn-add-crit" onClick={addObjective}>
+                                <Plus size={16} /> Ajouter un critère
+                            </button>
                         </div>
 
-                        <h4>Critères</h4>
-                        <div className="criteria-list">
-                            {criteria.map((criterion, index) => (
-                                <div className="criterion-row form-group" key={index}>
-                                    <TextField
-                                        fullWidth multiline rows={1} placeholder="Nom"
-                                        value={criterion.label}
-                                        onChange={(e) => {
-                                            const newC = [...criteria];
-                                            newC[index].label = e.target.value;
-                                            setCriteria(newC);
-                                        }}
-                                        required
-                                    />
-                                    <input
-                                        type="number" step="0.25" placeholder="Pts"
-                                        value={criterion.max_score}
-                                        onChange={(e) => {
-                                            const newC = [...criteria];
-                                            newC[index].max_score = e.target.value;
-                                            setCriteria(newC);
-                                        }}
-                                        required
-                                        style={{ width: '80px' }}
-                                    />
-                                    <button type="button" className="btn-delete" onClick={() => setCriteria(criteria.filter((_, i) => i !== index))} disabled={criteria.length <= 1}>×</button>
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={handleDragEnd}
+                        >
+                            <SortableContext
+                                items={formData.criteria.map(c => c.tempId)}
+                                strategy={verticalListSortingStrategy}
+                            >
+                                <div className="sortable-list">
+                                    {formData.criteria.map((c, index) => (
+                                        <SortableCriterion
+                                            key={c.tempId}
+                                            id={c.tempId}
+                                            criterion={c}
+                                            index={index}
+                                            onUpdate={updateCriterion}
+                                            onRemove={removeCriterion}
+                                            sections={existingSections}
+                                            isCustomSection={customSectionFlags[c.tempId] ?? true}
+                                            setCustomSection={(value) => setCustomFlag(c.tempId, value)}
+                                        />
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
+                            </SortableContext>
+                        </DndContext>
+                    </div>
+                </div>
 
-                        <button type="button" className="btn-add-criterion" onClick={() => setCriteria([...criteria, { label: '', max_score: '' }])}>+ Critère</button>
-
-                        <div className="form-actions">
-                            <button type="button" className="btn-secondary" onClick={onClose}>Annuler</button>
-                            <button type="submit" className="btn-primary" disabled={isSaving}>{isSaving ? 'Sauvegarde...' : 'Sauvegarder'}</button>
-                        </div>
-                    </form>
-                )}
+                <div className="modal-footer">
+                    <button className="btn-cancel" onClick={onClose}>Annuler</button>
+                    <button
+                        className="btn-save"
+                        onClick={() => onSave({ ...formData, journal_id: currentJournal.id })}
+                    >
+                        <Save size={18} /> Enregistrer
+                    </button>
+                </div>
             </div>
         </div>
     );

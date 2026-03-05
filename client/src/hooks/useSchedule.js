@@ -34,7 +34,6 @@ export const useSchedule = (setId) => {
             const formatted = {};
             // Votre service renvoie directement les données
             let dataConstr = data.data;
-            console.log(dataConstr);
 
             (dataConstr || []).forEach(slot => {
                 formatted[`${slot.day_of_week}-${slot.time_slot_id}`] = slot;
