@@ -27,8 +27,11 @@ export const getEvaluationForGrading = (id) => {
     return ApiService.get(`${EVALUATION_API_URL}/${id}/grading`);
 };
 
-export const saveGrades = (evaluationId, grades) => {
-    return ApiService.post(`${EVALUATION_API_URL}/${evaluationId}/grades`, { grades });
+export const saveGrades = (evaluationId, studentGrades, status = { is_completed: true, is_corrected: true }) => {
+    return ApiService.post(`${EVALUATION_API_URL}/${evaluationId}/grades`, {
+        studentGrades,
+        ...status
+    });
 };
 
 export const getEvaluationTemplates = () => {
