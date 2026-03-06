@@ -146,10 +146,13 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
             ...prev,
             criteria: [
                 ...prev.criteria,
+                // On peut laisser 'Général' ou mettre vide pour forcer le choix
                 { tempId: newTempId, name: '', section_name: 'Général', max_points: 0 }
             ]
         }));
-        setCustomSectionFlags(prev => ({ ...prev, [newTempId]: true }));
+
+        // CHANGE ICI : Mettre à false pour afficher le select par défaut
+        setCustomSectionFlags(prev => ({ ...prev, [newTempId]: false }));
     }, []);
 
     const removeCriterion = useCallback((index) => {
