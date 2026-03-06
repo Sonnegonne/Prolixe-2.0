@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { X, Plus, Save } from 'lucide-react';
+import { X, Plus, Save, Copy } from 'lucide-react'; // Ajout de Copy pour l'icône
 import { useJournal } from '../../hooks/useJournal';
 import ClassService from '../../services/ClassService';
+import { getEvaluationTemplates, getEvaluationById } from '../../services/EvaluationService'; // Import des services
 import {
     DndContext,
     closestCenter,
@@ -25,6 +26,11 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
     const [classes, setClasses] = useState([]);
     const { subjects, loadSubjects } = useSubjects();
 
+    // États pour la gestion des templates
+    const [templates, setTemplates] = useState([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState('');
+    const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
+
     const [formData, setFormData] = useState({
         title: '',
         class_id: '',
@@ -42,6 +48,7 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
     );
 
+    // Initialisation et chargement des templates
     useEffect(() => {
         if (!isOpen || !currentJournal?.id) return;
 
@@ -51,45 +58,19 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
 
         loadSubjects(currentJournal.id);
 
+        // Charger la liste des évaluations disponibles comme modèles
+        getEvaluationTemplates()
+            .then(res => setTemplates(res.data.data || []))
+            .catch(err => console.error("Erreur templates", err));
+
         if (evaluation) {
-            const mappedCriteria = (evaluation.criteria || []).map(c => ({
-                ...c,
-                name: c.name || c.label || '',
-                max_points: c.max_points ?? c.max_score ?? 0,
-                section_name: c.section_name || 'Général',
-                tempId: Math.random().toString(36).substr(2, 9)
-            }));
-            const flags = {};
-            mappedCriteria.forEach(c => { flags[c.tempId] = false; });
-            setFormData({
-                ...evaluation,
-                subject_id: evaluation.subject_id || '',
-                evaluation_date: evaluation.evaluation_date
-                    ? evaluation.evaluation_date.split('T')[0]
-                    : new Date().toISOString().split('T')[0],
-                criteria: mappedCriteria
-            });
-            setCustomSectionFlags(flags);
-
+            // Mode Édition
+            fillFormFromData(evaluation);
         } else if (evaluationToCopy) {
-            const mappedCriteria = evaluationToCopy.criteria.map(c => ({
-                ...c,
-                id: null,
-                tempId: Math.random().toString(36).substr(2, 9)
-            }));
-            const flags = {};
-            mappedCriteria.forEach(c => { flags[c.tempId] = false; });
-            setFormData({
-                ...evaluationToCopy,
-                id: null,
-                subject_id: evaluationToCopy.subject_id || '',
-                title: `${evaluationToCopy.title} (Copie)`,
-                evaluation_date: new Date().toISOString().split('T')[0],
-                criteria: mappedCriteria
-            });
-            setCustomSectionFlags(flags);
-
+            // Mode Copie directe
+            fillFormFromData(evaluationToCopy, true);
         } else {
+            // Mode Nouveau
             const initTempId = 'init-1';
             setFormData({
                 title: '',
@@ -100,9 +81,54 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
                 folder: '',
                 criteria: [{ tempId: initTempId, name: '', section_name: 'Général', max_points: 5 }]
             });
-            setCustomSectionFlags({ [initTempId]: true });
+            setCustomSectionFlags({ [initTempId]: false });
+            setSelectedTemplateId('');
         }
     }, [isOpen, evaluation, evaluationToCopy, currentJournal]);
+
+    // Fonction utilitaire pour mapper les critères et remplir le formulaire
+    const fillFormFromData = (data, isCopy = false) => {
+        const mappedCriteria = (data.criteria || []).map(c => ({
+            ...c,
+            id: isCopy ? null : c.id, // On reset l'ID si c'est une copie/template
+            name: c.name || c.label || '',
+            max_points: c.max_points ?? c.max_score ?? 0,
+            section_name: c.section_name || 'Général',
+            tempId: Math.random().toString(36).substr(2, 9)
+        }));
+
+        const flags = {};
+        mappedCriteria.forEach(c => { flags[c.tempId] = false; });
+
+        setFormData(prev => ({
+            ...data,
+            id: isCopy ? null : data.id,
+            title: isCopy ? `${data.title || data.name} (Copie)` : (data.title || data.name),
+            subject_id: data.subject_id || '',
+            evaluation_date: isCopy ? new Date().toISOString().split('T')[0] : (data.evaluation_date?.split('T')[0]),
+            criteria: mappedCriteria
+        }));
+        setCustomSectionFlags(flags);
+    };
+
+    // Handler pour le changement de modèle
+    const handleTemplateChange = async (e) => {
+        const templateId = e.target.value;
+        setSelectedTemplateId(templateId);
+        if (!templateId) return;
+
+        setIsLoadingTemplate(true);
+        try {
+            const res = await getEvaluationById(templateId);
+            const templateData = res.data.data;
+            // On applique les données du template sur le formulaire actuel (en mode copie)
+            fillFormFromData(templateData, true);
+        } catch (err) {
+            console.error("Erreur chargement détails template", err);
+        } finally {
+            setIsLoadingTemplate(false);
+        }
+    };
 
     useEffect(() => {
         if (!evaluation && !evaluationToCopy && subjects.length === 1) {
@@ -110,12 +136,10 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
         }
     }, [subjects, evaluation, evaluationToCopy]);
 
-    // Mémoïsé : ne change que quand les section_name changent réellement
     const existingSections = useMemo(() => Array.from(
         new Set(formData.criteria.map(c => c.section_name).filter(name => name?.trim()))
-    ), [formData.criteria.map(c => c.section_name).join('|')]);
+    ), [formData.criteria]);
 
-    // Mémoïsé : ne change jamais de référence
     const updateCriterion = useCallback((index, field, value) => {
         setFormData(prev => ({
             ...prev,
@@ -146,23 +170,15 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
             ...prev,
             criteria: [
                 ...prev.criteria,
-                // On peut laisser 'Général' ou mettre vide pour forcer le choix
                 { tempId: newTempId, name: '', section_name: 'Général', max_points: 0 }
             ]
         }));
-
-        // CHANGE ICI : Mettre à false pour afficher le select par défaut
         setCustomSectionFlags(prev => ({ ...prev, [newTempId]: false }));
     }, []);
 
     const removeCriterion = useCallback((index) => {
         setFormData(prev => {
             const removed = prev.criteria[index];
-            setCustomSectionFlags(flags => {
-                const next = { ...flags };
-                delete next[removed.tempId];
-                return next;
-            });
             return { ...prev, criteria: prev.criteria.filter((_, i) => i !== index) };
         });
     }, []);
@@ -171,7 +187,6 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
         onSave({ ...formData, journal_id: currentJournal.id });
     }, [formData, currentJournal, onSave]);
 
-    // Mémoïsé : évite de recréer le tableau d'IDs à chaque render
     const criteriaIds = useMemo(() => formData.criteria.map(c => c.tempId), [formData.criteria]);
 
     if (!isOpen) return null;
@@ -185,6 +200,30 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
                 </div>
 
                 <div className="modal-body">
+                    {/* SECTION TEMPLATE - Uniquement en création */}
+                    {!evaluation && !evaluationToCopy && (
+                        <div className="template-selector-zone">
+                            <div className="form-group">
+                                <label><Copy size={14} /> Utiliser une évaluation existante comme modèle</label>
+                                <select
+                                    value={selectedTemplateId}
+                                    onChange={handleTemplateChange}
+                                    className="template-select"
+                                >
+                                    <option value="">-- Partir de zéro --</option>
+                                    {templates.map(t => (
+                                        console.log(t),
+                                        <option key={t.id} value={t.id}>
+                                            [{t.journal_name}] {t.title}
+                                        </option>
+                                    ))}
+                                </select>
+                                {isLoadingTemplate && <span className="loader-inline">Chargement des critères...</span>}
+                            </div>
+                            <hr className="separator" />
+                        </div>
+                    )}
+
                     <div className="form-grid">
                         <div className="form-group">
                             <label>Titre</label>
@@ -243,11 +282,7 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
                             </button>
                         </div>
 
-                        <DndContext
-                            sensors={sensors}
-                            collisionDetection={closestCenter}
-                            onDragEnd={handleDragEnd}
-                        >
+                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                             <SortableContext items={criteriaIds} strategy={verticalListSortingStrategy}>
                                 <div className="sortable-list">
                                     {formData.criteria.map((c, index) => (
@@ -259,7 +294,7 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
                                             onUpdate={updateCriterion}
                                             onRemove={removeCriterion}
                                             sections={existingSections}
-                                            isCustomSection={customSectionFlags[c.tempId] ?? true}
+                                            isCustomSection={customSectionFlags[c.tempId] ?? false}
                                             setCustomSection={setCustomFlag}
                                         />
                                     ))}
