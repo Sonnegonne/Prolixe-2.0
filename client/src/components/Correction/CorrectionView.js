@@ -7,7 +7,8 @@ import {
     CheckCircle,
     UserCheck,
     MessageSquare,
-    ClipboardList
+    ClipboardList,
+    TrendingUp
 } from 'lucide-react';
 import { getEvaluationForGrading, saveGrades } from '../../services/EvaluationService';
 import { useToast } from '../../hooks/useToast';
@@ -33,12 +34,11 @@ const CommentDisplay = ({ text }) => {
     );
 };
 
-// Retourne une classe CSS selon le ratio score/max
 const getScoreClass = (score, max) => {
     if (score === null || score === undefined || score === '' || max == null || max === 0) return '';
     const ratio = parseFloat(score) / parseFloat(max);
-    if (ratio < 0.5)  return 'score-fail';
-    if (ratio < 0.7)  return 'score-warning';
+    if (ratio < 0.5) return 'score-fail';
+    if (ratio < 0.7) return 'score-warning';
     return 'score-success';
 };
 
@@ -170,9 +170,14 @@ const CorrectionView = () => {
     const handleGradeChange = (studentId, criterionId, value, maxPoints) => {
         const key = `${studentId}-${criterionId}`;
         let newScore = value === '' ? null : parseFloat(value);
+        const limit = parseFloat(maxPoints);
 
         if (newScore !== null && !isNaN(newScore)) {
-            newScore = Math.max(0, Math.min(newScore, parseFloat(maxPoints)));
+            // Si le critère a un barème (maxPoints > 0), on peut brider (optionnel)
+            // Si maxPoints est à 0, c'est un bonus/malus : on autorise tout (négatif ou positif)
+            if (limit > 0) {
+                newScore = Math.max(0, Math.min(newScore, limit));
+            }
         }
 
         setGrades(prev => ({
@@ -282,21 +287,28 @@ const CorrectionView = () => {
                                     const key = `${selectedStudentId}-${criterion.id}`;
                                     const gradeInfo = grades[key] || { score: '', comment: '' };
                                     const isEditing = editingCommentKey === key;
+                                    const isBonus = parseFloat(criterion.max_points) === 0;
                                     const scoreClass = isSelectedStudentAbsent ? '' : getScoreClass(gradeInfo.score, criterion.max_points);
 
                                     return (
-                                        <div className={`criterion-row ${isSelectedStudentAbsent ? 'disabled' : ''}`} key={criterion.id}>
+                                        <div className={`criterion-row ${isSelectedStudentAbsent ? 'disabled' : ''} ${isBonus ? 'is-bonus' : ''}`} key={criterion.id}>
                                             <div className="criterion-main">
-                                                <span className="criterion-name">{criterion.name}</span>
+                                                <div className="criterion-label-zone">
+                                                    <span className="criterion-name">{criterion.name}</span>
+                                                    {isBonus && <span className="bonus-pill"><TrendingUp size={10}/> Bonus/Malus</span>}
+                                                </div>
                                                 <div className={`grade-input-group ${scoreClass}`}>
                                                     <input
                                                         type="number"
                                                         step="0.25"
+                                                        placeholder={isBonus ? "+/-" : "0"}
                                                         value={isSelectedStudentAbsent ? '' : gradeInfo.score ?? ''}
                                                         disabled={isSelectedStudentAbsent}
                                                         onChange={(e) => handleGradeChange(selectedStudentId, criterion.id, e.target.value, criterion.max_points)}
                                                     />
-                                                    <span className="max-points">/ {criterion.max_points}</span>
+                                                    <span className="max-points">
+                                                        {isBonus ? 'pts' : `/ ${criterion.max_points}`}
+                                                    </span>
                                                 </div>
                                             </div>
 
