@@ -2,7 +2,7 @@
 
 .correction-view-focused {
   @include page-container-base;
-  padding-bottom: 120px; // Espace pour la barre de navigation fixe
+  padding-bottom: 120px;
 
   .correction-header {
     @include page-header-base;
@@ -69,25 +69,30 @@
         padding: 0.8rem 0;
         outline: none;
         cursor: pointer;
-
-        option{
-          background-color: var(--bg-dark-tertiary);
-        }
+        option { background-color: var(--bg-dark-tertiary); }
       }
     }
 
     .absent-checkbox {
       display: flex;
       align-items: center;
-      gap: 0.6rem;
+      gap: 0.75rem;
       cursor: pointer;
-      white-space: nowrap;
-      span { font-weight: 600; color: var(--text-secondary); }
-      input { width: 18px; height: 18px; accent-color: var(--accent-blue); }
+      background: rgba(var(--red-danger-rgb), 0.05);
+      padding: 0.6rem 1.2rem;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+
+      &:hover {
+        background: rgba(var(--red-danger-rgb), 0.1);
+        border-color: rgba(var(--red-danger-rgb), 0.3);
+      }
+      span { font-weight: 700; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; }
+      input { width: 20px; height: 20px; accent-color: var(--red-danger); cursor: pointer; }
     }
   }
 
-  // --- Titres de sections ---
   .section-title {
     display: flex;
     align-items: center;
@@ -97,7 +102,6 @@
     h4 { margin: 0; text-transform: uppercase; font-size: 0.85rem; letter-spacing: 0.5px; }
   }
 
-  // --- Critères ---
   .criteria-list { display: flex; flex-direction: column; gap: 1.25rem; }
 
   .criterion-row {
@@ -107,7 +111,6 @@
     border: 1px solid var(--border-color);
     transition: transform 0.2s;
     margin-bottom: 1rem;
-
     &:hover { border-color: var(--accent-blue-transparent); }
     &.disabled { opacity: 0.3; pointer-events: none; filter: grayscale(1); }
   }
@@ -133,7 +136,6 @@
     }
   }
 
-  // --- Commentaire Global ---
   .global-student-comment {
     margin-bottom: 2rem;
     padding: 1.25rem;
@@ -141,29 +143,25 @@
     border: 1px solid var(--border-color);
     border-radius: 12px;
     &.disabled { opacity: 0.3; pointer-events: none; }
-
     .global-textarea {
       min-height: 120px; width: 100%; background: var(--bg-dark-tertiary); border: 1px solid var(--accent-blue);
       padding: 1rem; border-radius: 8px; color: white; line-height: 1.6;
     }
   }
 
-  // --- FOOTER FIXE (Score + Bouton Suivant) ---
+  // --- FOOTER FIXE ---
   .navigation-footer {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 90px;
-    background: rgba(var(--bg-dark-primary-rgb), 0.95);
-    backdrop-filter: blur(10px);
-    border-top: 1px solid var(--border-color);
+    position: sticky;
+    bottom: 20px;
+    background: #2d3748;
+    color: white;
+    padding: 15px 30px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 2rem;
+    margin-top: 40px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
     z-index: 1000;
-    box-shadow: 0 -10px 30px rgba(0,0,0,0.3);
 
     .student-total-display {
       display: flex;
@@ -174,221 +172,74 @@
     }
 
     .btn-next-student {
-      @include btn-primary-base;
+      background: #4dabf7;
+      color: white;
+      border: none;
+      padding: 10px 25px;
+      border-radius: 25px;
+      font-weight: 700;
       display: flex;
       align-items: center;
-      gap: 1rem;
-      padding: 0.8rem 2rem;
-      font-size: 1.1rem;
-      background: var(--accent-blue);
-      border-radius: 50px; // Style "pill" pour le bouton principal
-      box-shadow: 0 4px 15px rgba(var(--accent-blue-rgb), 0.3);
-
-      &:hover:not(:disabled) {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(var(--accent-blue-rgb), 0.4);
-      }
-
-      &:disabled { opacity: 0.6; cursor: not-allowed; }
+      gap: 10px;
+      cursor: pointer;
+      transition: transform 0.2s;
+      &:hover:not(:disabled) { transform: translateX(5px); background: #339af0; }
+      &:disabled { opacity: 0.5; cursor: not-allowed; }
     }
   }
 
-  // --- Barre Latérale (Sommaire) ---
+  // --- BARRE LATÉRALE (SOMMAIRE) ---
   .class-summary-panel {
     h3 { margin-top: 0; font-size: 1.1rem; color: var(--text-secondary); margin-bottom: 1.5rem; }
-    .summary-list { display: flex; flex-direction: column; gap: 0.4rem; max-height: 70vh; overflow-y: auto; }
+    .summary-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 70vh; overflow-y: auto; }
 
     .summary-item {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 0.8rem 1rem; background: rgba(255,255,255,0.02); border-radius: 8px;
-      border: 1px solid transparent; transition: all 0.2s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.8rem 1rem;
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 8px;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+      cursor: pointer;
 
-      .student-name { font-size: 0.95rem; color: var(--text-muted); }
-      .student-score { font-weight: 700; color: var(--text-light); font-family: 'Fira Code', monospace; }
+      .student-info { display: flex; align-items: center; gap: 0.75rem; }
 
-      &.active {
-        background: rgba(var(--accent-blue-rgb), 0.1);
-        border-color: var(--accent-cyan);
-        .student-name { color: white; font-weight: 600; }
-        .student-score { color: var(--accent-green); }
+      // État : En attente
+      &.is-pending {
+        border-left: 3px solid var(--accent-warning, #ffd43b);
+        .student-name { color: white; font-weight: 500; }
+        .status-marker .icon-todo {
+          width: 8px; height: 8px; border-radius: 50%;
+          background: var(--accent-warning, #ffd43b);
+          box-shadow: 0 0 8px rgba(255, 212, 59, 0.4);
+        }
       }
 
-      &:hover:not(.active) { background: rgba(255,255,255,0.05); }
+      // État : Corrigé
+      &.is-corrected {
+        opacity: 0.7;
+        background: rgba(255, 255, 255, 0.01);
+        .student-name { color: var(--text-muted); }
+        .status-marker .icon-done { color: var(--accent-green); }
+        &:hover { opacity: 1; }
+      }
+
+      // État : Sélectionné
+      &.active {
+        background: rgba(var(--accent-blue-rgb), 0.15) !important;
+        border-color: var(--accent-cyan) !important;
+        opacity: 1 !important;
+        .student-name { color: white !important; font-weight: 700; }
+      }
+
+      &:hover:not(.active) { background: rgba(255, 255, 255, 0.05); }
     }
   }
 }
 
-// Bouton spécial "Ajouter" pour les commentaires vides
-.btn-add-comment {
-  width: 100%;
-  padding: 0.8rem;
-  background: transparent;
-  border: 1px dashed var(--border-color);
-  border-radius: 8px;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.2s;
-
-  &:hover {
-    border-color: var(--accent-blue);
-    color: var(--accent-blue);
-    background: rgba(var(--accent-blue-rgb), 0.02);
-  }
-}
-
-
-.btn-secondary{
-  @include btn-primary-base;
-}
-
-b {
-  font-size: 2rem;
-  color:white;
-  font-style: normal;
-  text-decoration: underline;
-}
-
-code{
-  color: var(--accent-cyan);
-}
-
-.criteria-section {
-  margin-bottom: 2.5rem;
-
-  .section-divider {
-    background: #f1f3f5;
-    padding: 10px 15px;
-    border-radius: 6px;
-    border-left: 5px solid #4dabf7;
-    color: #2c3e50;
-    font-size: 0.95rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 1rem;
-  }
-}
-
-.criterion-edit-row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  background: white;
-  padding: 10px;
-  border: 1px solid #eee;
-  margin-bottom: 5px;
-  border-radius: 4px;
-
-  .drag-handle { cursor: grab; color: #ccc; }
-  .input-section { width: 120px; }
-  .input-name { flex: 1; }
-  .input-points-group { width: 80px; display: flex; align-items: center; gap: 5px; }
-}
-
-.student-selector-bar {
-
-  .selectStudents{
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid var(--glass-border);
-    border-radius: 8px;
-    border-left: 5px solid;
-    border-left-color: var(--accent-cyan);
-    padding: 8px 14px;
-    color: white;
-    outline: none;
-    font-size: 0.9rem;
-    width: 15rem;
-
-    option{
-      background-color: var(--bg-dark-tertiary);
-    }
-  }
-
-  .absent-checkbox {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    cursor: pointer;
-    background: rgba(var(--red-danger-rgb), 0.05);
-    padding: 0.6rem 1.2rem;
-    border-radius: 8px;
-    border: 1px solid transparent;
-    transition: all 0.2s;
-
-    &:hover {
-      background: rgba(var(--red-danger-rgb), 0.1);
-      border-color: rgba(var(--red-danger-rgb), 0.3);
-    }
-
-    span {
-      font-weight: 700;
-      color: var(--text-muted);
-      font-size: 0.85rem;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    input {
-      width: 20px;
-      height: 20px;
-      accent-color: var(--red-danger); // On passe en rouge si absent
-      cursor: pointer;
-    }
-  }
-}
-
-// --- FOOTER FIXE (Score + Bouton Suivant) ---
-.navigation-footer {
-  position: sticky; // Ou absolute/fixed selon ton layout
-  bottom: 20px;
-  background: #2d3748;
-  color: white;
-  padding: 15px 30px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 40px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
-
-  .total-box {
-    font-size: 1.1rem;
-    strong {
-      font-size: 1.4rem;
-      margin-left: 10px;
-      color: #4dabf7;
-    }
-  }
-
-  .btn-next-student {
-    background: #4dabf7;
-    color: white;
-    border: none;
-    padding: 10px 25px;
-    border-radius: 25px;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    cursor: pointer;
-    transition: transform 0.2s;
-
-    &:hover:not(:disabled) {
-      transform: translateX(5px);
-      background: #339af0;
-    }
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-  }
-}
-
-// =============================================
-// COULEURS DE SCORE — à ajouter à la fin de CorrectionView.scss
-// =============================================
-
-// Variables de couleur
+// --- VARIABLES & CLASSES DE SCORE ---
 $score-fail-color:    #ff6b6b;
 $score-fail-bg:       rgba(255, 107, 107, 0.12);
 $score-fail-border:   rgba(255, 107, 107, 0.35);
@@ -401,61 +252,35 @@ $score-success-color: #51cf66;
 $score-success-bg:    rgba(81, 207, 102, 0.10);
 $score-success-border:rgba(81, 207, 102, 0.35);
 
-// --- Dans le grade-input-group (critères) ---
 .grade-input-group {
-  transition: border-color 0.25s, background 0.25s;
-
-  &.score-fail {
-    border-color: $score-fail-border;
-    background: $score-fail-bg;
-    input { color: $score-fail-color; }
-    .max-points { color: rgba($score-fail-color, 0.6); }
-  }
-  &.score-warning {
-    border-color: $score-warning-border;
-    background: $score-warning-bg;
-    input { color: $score-warning-color; }
-    .max-points { color: rgba($score-warning-color, 0.6); }
-  }
-  &.score-success {
-    border-color: $score-success-border;
-    background: $score-success-bg;
-    input { color: $score-success-color; }
-    .max-points { color: rgba($score-success-color, 0.6); }
-  }
+  transition: all 0.25s;
+  &.score-fail { border-color: $score-fail-border; background: $score-fail-bg; input { color: $score-fail-color; } .max-points { color: rgba($score-fail-color, 0.6); } }
+  &.score-warning { border-color: $score-warning-border; background: $score-warning-bg; input { color: $score-warning-color; } .max-points { color: rgba($score-warning-color, 0.6); } }
+  &.score-success { border-color: $score-success-border; background: $score-success-bg; input { color: $score-success-color; } .max-points { color: rgba($score-success-color, 0.6); } }
 }
 
-// --- Dans le footer (total élève courant) ---
 .student-total-display strong {
-  transition: color 0.25s;
-  &.score-fail    { color: $score-fail-color; }
+  &.score-fail { color: $score-fail-color; }
   &.score-warning { color: $score-warning-color; }
   &.score-success { color: $score-success-color; }
 }
 
-// --- Dans la liste latérale ---
 .summary-item .student-score {
-  font-weight: 700;
-  font-family: 'Fira Code', monospace;
-  padding: 2px 8px;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  transition: all 0.25s;
+  font-weight: 700; font-family: 'Fira Code', monospace;
+  padding: 2px 8px; border-radius: 20px; font-size: 0.85rem;
+  &.score-fail { color: $score-fail-color; background: $score-fail-bg; }
+  &.score-warning { color: $score-warning-color; background: $score-warning-bg; }
+  &.score-success { color: $score-success-color; background: $score-success-bg; }
+  &.score-absent { color: var(--text-muted); font-style: italic; }
+}
 
-  &.score-fail {
-    color: $score-fail-color;
-    background: $score-fail-bg;
-  }
-  &.score-warning {
-    color: $score-warning-color;
-    background: $score-warning-bg;
-  }
-  &.score-success {
-    color: $score-success-color;
-    background: $score-success-bg;
-  }
-  &.score-absent {
-    color: var(--text-muted);
-    font-style: italic;
-  }
+// Utilitaires
+.btn-secondary { @include btn-primary-base; }
+b { font-size: 2rem; color: white; text-decoration: underline; }
+code { color: var(--accent-cyan); }
+
+.criteria-section .section-divider {
+  background: #f1f3f5; padding: 10px 15px; border-radius: 6px;
+  border-left: 5px solid #4dabf7; color: #2c3e50; font-size: 0.95rem;
+  text-transform: uppercase; margin-bottom: 1rem;
 }

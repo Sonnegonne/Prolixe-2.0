@@ -5,6 +5,7 @@ import {
     Save,
     ArrowLeft,
     CheckCircle,
+    Circle,
     UserCheck,
     MessageSquare,
     ClipboardList,
@@ -123,6 +124,23 @@ const CorrectionView = () => {
         return totals;
     }, [students, criteria, grades, absentStudents]);
 
+    // Détermine quels élèves ont déjà été corrigés
+    const correctedStudentIds = useMemo(() => {
+        const corrected = new Set();
+        students.forEach(student => {
+            if (absentStudents.has(student.id)) {
+                corrected.add(student.id);
+            } else {
+                const hasAnyGrade = criteria.some(c => {
+                    const g = grades[`${student.id}-${c.id}`];
+                    return g?.score !== null && g?.score !== undefined && g.score !== '';
+                });
+                if (hasAnyGrade) corrected.add(student.id);
+            }
+        });
+        return corrected;
+    }, [students, absentStudents, criteria, grades]);
+
     const prepareStudentPayload = useCallback((studentId) => {
         const isAbsent = absentStudents.has(studentId);
         const totalScore = studentTotals[studentId] || 0;
@@ -173,8 +191,6 @@ const CorrectionView = () => {
         const limit = parseFloat(maxPoints);
 
         if (newScore !== null && !isNaN(newScore)) {
-            // Si le critère a un barème (maxPoints > 0), on peut brider (optionnel)
-            // Si maxPoints est à 0, c'est un bonus/malus : on autorise tout (négatif ou positif)
             if (limit > 0) {
                 newScore = Math.max(0, Math.min(newScore, limit));
             }
@@ -225,7 +241,11 @@ const CorrectionView = () => {
                                 value={selectedStudentId || ''}
                                 onChange={(e) => setSelectedStudentId(Number(e.target.value))}
                             >
-                                {students.map(s => <option key={s.id} value={s.id}>{s.lastname} {s.firstname}</option>)}
+                                {students.map(s => (
+                                    <option key={s.id} value={s.id}>
+                                        {correctedStudentIds.has(s.id) ? '✓ ' : ''}{s.lastname} {s.firstname}
+                                    </option>
+                                ))}
                             </select>
                         </div>
                         <label className="absent-checkbox">
@@ -300,7 +320,7 @@ const CorrectionView = () => {
                                                 <div className={`grade-input-group ${scoreClass}`}>
                                                     <input
                                                         type="number"
-                                                        step="0.25"
+                                                        step="0.5"
                                                         placeholder={isBonus ? "+/-" : "0"}
                                                         value={isSelectedStudentAbsent ? '' : gradeInfo.score ?? ''}
                                                         disabled={isSelectedStudentAbsent}
@@ -361,17 +381,26 @@ const CorrectionView = () => {
                     <div className="summary-list">
                         {students.map(s => {
                             const total = studentTotals[s.id];
+                            const isCorrected = correctedStudentIds.has(s.id);
+                            const scoreColorClass = total === null ? 'score-absent' : getScoreClass(total, evaluation.max_score);
                             const scoreClass = total === null ? 'score-absent' : getScoreClass(total, evaluation.max_score);
                             return (
                                 <div
                                     key={s.id}
-                                    className={`summary-item ${s.id === selectedStudentId ? 'active' : ''}`}
+                                    className={`summary-item ${s.id === selectedStudentId ? 'active' : ''} ${isCorrected ? 'is-corrected' : 'is-pending'}`}
                                     onClick={() => setSelectedStudentId(s.id)}
                                 >
-                                    <span className="student-name">{s.lastname} {s.firstname}</span>
-                                    <span className={`student-score ${scoreClass}`}>
-                                        {total === null ? 'ABS' : Number(total).toFixed(1)}
-                                    </span>
+                                    <div className="student-info">
+                                        <div className="status-marker">
+                                            {isCorrected ? <CheckCircle size={14} className="icon-done" /> : <Circle size={14} className="icon-todo" />}
+                                        </div>
+                                        <span className="student-name">{s.lastname} {s.firstname}</span>
+                                    </div>
+
+                                    {/* Application de la classe de couleur ici */}
+                                    <span className={`student-score ${scoreColorClass}`}>
+                    {total === null ? 'ABS' : Number(total).toFixed(1)}
+                </span>
                                 </div>
                             );
                         })}

@@ -53,6 +53,7 @@ const AuthenticatedAppContent = ({ isMenuOpen, toggleMenu }) => {
 const App = () => {
     const { isAuthenticated, loadingAuth } = useAuth();
     const navigate = useNavigate();
+
     const { toasts, removeToast } = useToast(); // Récupération des toasts
 
     const breakpoint = 1600;
