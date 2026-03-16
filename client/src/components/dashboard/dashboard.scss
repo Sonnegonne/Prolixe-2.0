@@ -218,34 +218,6 @@ p{
     }
   }
 
-  // ── Note Section ───────────────────────────────────────────
-  .side-column {
-    .note-section-container {
-      background: $surface-1;
-      border: 1px solid $border;
-      border-radius: $radius-xl;
-      padding: 1.75rem;
-      height: 100%;
-
-      h2 { @include section-header-style($violet); }
-    }
-
-    textarea {
-      width: 100%;
-      background: $surface-2;
-      border: 1px solid $border;
-      border-radius: $radius-md;
-      color: $text-primary;
-      padding: 1rem;
-      font-size: 0.95rem;
-      resize: vertical;
-      min-height: 120px;
-      margin-bottom: 1rem;
-
-      &:focus { border-color: $violet; outline: none; box-shadow: 0 0 0 2px $violet-dim; }
-    }
-  }
-
   // ── Stats Grid ─────────────────────────────────────────────
   .stats-grid {
     display: grid;

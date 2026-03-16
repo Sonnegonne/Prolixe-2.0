@@ -2,15 +2,20 @@
 const db = require('../../config/database');
 
 /**
- * Récupérer les notes de l'utilisateur authentifié.
+ * Récupérer les notes d'un journal spécifique.
  */
 const getNotes = async (req, res) => {
-    const userId = req.user.id; // Récupère l'ID de l'utilisateur
+    // On récupère le journalId depuis les paramètres de l'URL ou la requête
+    const { journalId } = req.query;
+
+    if (!journalId) {
+        return res.status(400).json({ message: "Le journalId est requis." });
+    }
 
     try {
         const [notes] = await db.query(
-            'SELECT id, text, state, date, time, location FROM NOTES WHERE user_id = ? ORDER BY date ASC, time ASC',
-            [userId]
+            'SELECT id, text, state, date, time, location, journal_id FROM NOTE WHERE journal_id = ? ORDER BY date ASC, time ASC',
+            [journalId]
         );
         res.status(200).json(notes);
     } catch (error) {
@@ -20,14 +25,13 @@ const getNotes = async (req, res) => {
 };
 
 /**
- * Créer une nouvelle note pour l'utilisateur authentifié.
+ * Créer une nouvelle note liée à un journal.
  */
 const createNote = async (req, res) => {
-    const userId = req.user.id; // Récupère l'ID de l'utilisateur
-    const { text, state, date, time, location } = req.body;
+    const { text, state, date, time, location, journal_id } = req.body;
 
-    if (!text) {
-        return res.status(400).json({ message: "Le contenu de la note ne peut pas être vide." });
+    if (!text || !journal_id) {
+        return res.status(400).json({ message: "Le contenu et l'ID du journal sont requis." });
     }
 
     const noteState = state || 'autre';
@@ -37,14 +41,15 @@ const createNote = async (req, res) => {
 
     try {
         const [insertResult] = await db.query(
-            'INSERT INTO NOTES (text, state, date, time, location, user_id) VALUES (?, ?, ?, ?, ?, ?)',
-            [text, noteState, noteDate, noteTime, noteLocation, userId]
+            'INSERT INTO NOTE (text, state, date, time, location, journal_id) VALUES (?, ?, ?, ?, ?, ?)',
+            [text, noteState, noteDate, noteTime, noteLocation, journal_id]
         );
+
         const newNoteId = insertResult.insertId;
 
         const [newNoteRows] = await db.query(
-            'SELECT id, text, state, date, time, location FROM NOTES WHERE id = ? AND user_id = ?',
-            [newNoteId, userId]
+            'SELECT id, text, state, date, time, location, journal_id FROM NOTE WHERE id = ?',
+            [newNoteId]
         );
 
         res.status(201).json(newNoteRows[0]);
@@ -55,15 +60,14 @@ const createNote = async (req, res) => {
 };
 
 /**
- * Mettre à jour une note appartenant à l'utilisateur authentifié.
+ * Mettre à jour une note.
  */
 const updateNote = async (req, res) => {
-    const userId = req.user.id; // Récupère l'ID de l'utilisateur
     const { id } = req.params;
-    const { text, state, date, time, location } = req.body;
+    const { text, state, date, time, location, journal_id } = req.body;
 
-    if (!text && !state && !date && !time && !location) {
-        return res.status(400).json({ message: "Au moins un champ doit être fourni pour la mise à jour." });
+    if (!text && !state && !date && !time && !location && !journal_id) {
+        return res.status(400).json({ message: "Au moins un champ doit être fourni." });
     }
 
     const fieldsToUpdate = {};
@@ -72,20 +76,18 @@ const updateNote = async (req, res) => {
     if (date !== undefined) fieldsToUpdate.date = date || null;
     if (time !== undefined) fieldsToUpdate.time = time || null;
     if (location !== undefined) fieldsToUpdate.location = location || null;
-
-    const query = 'UPDATE NOTES SET ? WHERE id = ? AND user_id = ?';
-    const params = [fieldsToUpdate, id, userId];
+    if (journal_id !== undefined) fieldsToUpdate.journal_id = journal_id;
 
     try {
-        const [result] = await db.query(query, params);
+        const [result] = await db.query('UPDATE NOTE SET ? WHERE id = ?', [fieldsToUpdate, id]);
 
         if (result.affectedRows === 0) {
-            return res.status(404).json({ message: "Note non trouvée ou non autorisée." });
+            return res.status(404).json({ message: "Note non trouvée." });
         }
 
         const [updatedNoteRows] = await db.query(
-            'SELECT id, text, state, date, time, location FROM NOTES WHERE id = ? AND user_id = ?',
-            [id, userId]
+            'SELECT id, text, state, date, time, location, journal_id FROM NOTE WHERE id = ?',
+            [id]
         );
 
         res.status(200).json(updatedNoteRows[0]);
@@ -96,17 +98,16 @@ const updateNote = async (req, res) => {
 };
 
 /**
- * Supprimer une note appartenant à l'utilisateur authentifié.
+ * Supprimer une note.
  */
 const deleteNote = async (req, res) => {
-    const userId = req.user.id; // Récupère l'ID de l'utilisateur
     const { id } = req.params;
 
     try {
-        const [result] = await db.query('DELETE FROM NOTES WHERE id = ? AND user_id = ?', [id, userId]);
+        const [result] = await db.query('DELETE FROM NOTE WHERE id = ?', [id]);
 
         if (result.affectedRows === 0) {
-            return res.status(404).json({ message: "Note non trouvée ou non autorisée." });
+            return res.status(404).json({ message: "Note non trouvée." });
         }
         res.status(200).json({ message: "Note supprimée avec succès" });
     } catch (error) {

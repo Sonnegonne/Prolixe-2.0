@@ -1,0 +1,423 @@
+/* ============================================================
+   NotesSection.scss — Version optimisée & corrigée
+   ============================================================ */
+
+// ── Tokens locaux ──────────────────────────────────────────
+$glass-bg: rgba(255, 255, 255, 0.04);
+$glass-border: rgba(255, 255, 255, 0.1);
+$glass-blur: blur(12px);
+
+$surface-1:     #111827;
+$surface-2:     #1a2235;
+$surface-3:     #232f42;
+$border:        rgba(255, 255, 255, 0.07);
+$radius-xl:     1rem;
+$radius-md:     0.625rem;
+$teal:          #0d9488;
+$teal-light:    #14b8a6;
+$text-primary:  #f1f5f9;
+$text-muted:    #94a3b8;
+$transition:    all 0.2s ease;
+
+$accent-red:    #ef4444;
+
+// ── Couleurs par état ──────────────────────────────────────
+$color-todo:               #f59e0b;
+$color-cap:                #10b981;
+$color-conseil-de-classe: #16a2f9;
+$color-reunions-de-parents:#ef4444;
+$color-autre:              #6b7280;
+
+
+// ── Composant racine ───────────────────────────────────────
+.notes-section {
+  background:    $surface-1;
+  border:        1px solid $border;
+  border-radius: $radius-xl;
+  padding:       1.75rem;
+  display:       flex;
+  flex-direction: column;
+  gap:           1.5rem;
+  margin-top: 2rem;
+
+  // ── Titre ──
+  h2 {
+    font-size:   1.1rem;
+    font-weight: 700;
+    color:       $text-primary;
+    display:     flex;
+    align-items: center;
+    gap:         0.75rem;
+
+    &::before {
+      content:       '';
+      width:         4px;
+      height:        1.2rem;
+      background:    $teal;
+      border-radius: 2px;
+      flex-shrink:   0;
+    }
+  }
+
+  // ── Zone de saisie ─────────────────────────────────────
+  .note-input-area {
+    background:    $surface-2;
+    border:        1px solid $border;
+    border-radius: $radius-xl;
+    padding:       1.25rem;
+    display:       flex;
+    flex-direction: column;
+    gap:           1rem;
+    margin-bottom: 2rem;
+
+    textarea {
+      width:      100%;
+      background: transparent;
+      border:     none;
+      border-bottom: 1px solid $border;
+      color:      $text-primary;
+      outline:    none;
+      resize:     none;
+      padding:    0.5rem 0;
+      min-height: 60px;
+      font-size:  0.95rem;
+      transition: border-color 0.2s;
+
+      &:focus {
+        border-bottom-color: $teal;
+      }
+
+      &::placeholder {
+        color: $text-muted;
+      }
+    }
+
+    // Grille des champs du formulaire
+    .note-form-grid {
+      display:               grid;
+      grid-template-columns: 1.5fr 1fr 0.8fr 0.8fr min-content;
+      gap:                   0.75rem;
+      align-items:           center;
+
+      @media (max-width: 768px) {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      input,
+      select {
+        background:    $surface-3;
+        border:        1px solid $border;
+        border-radius: $radius-md;
+        color:         $text-primary;
+        padding:       0.5rem;
+        height:        38px;
+        font-size:     0.85rem;
+        outline:       none;
+        transition:    border-color 0.2s, color 0.2s;
+
+        &:focus {
+          border-color: $teal;
+        }
+      }
+
+      // ── Select coloré selon l'état sélectionné ──
+      .state-select {
+        background: $glass-bg !important;
+        backdrop-filter: $glass-blur;
+        -webkit-backdrop-filter: $glass-blur;
+        border: 1px solid $glass-border !important;
+        border-radius: $radius-md;
+        color: $text-primary;
+        padding: 0.5rem;
+        outline: none;
+        cursor: pointer;
+        transition: $transition;
+        font-weight: 600;
+
+        // Style quand on change la sélection (bordure dynamique)
+        &.state-todo { border-color: rgba($color-todo, 0.5) !important; color: $color-todo; }
+        &.state-cap { border-color: rgba($color-cap, 0.5) !important; color: $color-cap; }
+        &.state-conseil-de-classe { border-color: rgba($color-conseil-de-classe, 0.5) !important; color: $color-conseil-de-classe; }
+        &.state-reunions-de-parents { border-color: rgba($color-reunions-de-parents, 0.5) !important; color: $color-reunions-de-parents; }
+        &.state-autre { border-color: $glass-border !important; color: $text-muted; }
+
+        // ── IMPORTANT : Couleurs des options ──
+        // Note : Le rendu dépend du navigateur, mais cela aide à la lisibilité
+        option {
+          background-color: #1a2235; // Fond solide pour la liste déroulante (le flou ne marche pas sur les options natives)
+          color: white;
+          padding: 10px;
+
+          &[value="todo"] { color: $color-todo; }
+          &[value="cap"] { color: $color-cap; }
+          &[value="conseil-de-classe"] { color: $color-conseil-de-classe; }
+          &[value="réunions-de-parents"] { color: $color-reunions-de-parents; }
+          &[value="autre"] { color: $text-muted; }
+        }
+      }
+    }
+  }
+
+  // ── Bouton Ajouter ─────────────────────────────────────
+  .add-note-btn {
+    align-self:    flex-end;
+    background:    $teal;
+    color:         #fff;
+    border:        none;
+    border-radius: $radius-md;
+    padding:       0.6rem 1.5rem;
+    font-weight:   700;
+    font-size:     0.9rem;
+    cursor:        pointer;
+    transition:    background 0.2s, opacity 0.2s;
+
+    &:hover:not(:disabled) {
+      background: $teal-light;
+    }
+
+    &:disabled {
+      opacity:    0.45;
+      background: $surface-3;
+      cursor:     not-allowed;
+    }
+  }
+
+  // ── Liste des notes ────────────────────────────────────
+  .notes-list-container {
+    display:        flex;
+    flex-direction: column;
+    gap:            0.75rem;
+    max-height:     500px;
+    overflow-y:     auto;
+
+    // Scrollbar discrète
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+
+    &::-webkit-scrollbar       { width: 4px; }
+    &::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+  }
+
+  // ── Carte Note ─────────────────────────────────────────
+  .note-item {
+    background:    rgba(255, 255, 255, 0.03);
+    border-left:   4px solid $color-autre;
+    border-radius: 0.5rem;
+    padding:       1rem;
+    display:       flex;
+    justify-content: space-between;
+    align-items:   flex-start;
+    gap:           1rem;
+    transition:    $transition;
+
+    &:hover {
+      .note-actions {
+        opacity: 1;
+        pointer-events: auto;
+      }
+    }
+
+    // ── Couleurs par état ──
+    &.state-todo {
+      border-left-color: $color-todo;
+      .note-category { background: $color-todo; color: #1a1a1a; }
+    }
+    &.state-cap {
+      border-left-color: $color-cap;
+      .note-category { background: $color-cap; color: #fff; }
+    }
+    &.state-conseil-de-classe {
+      border-left-color: $color-conseil-de-classe;
+      .note-category { background: $color-conseil-de-classe; color: #fff; }
+    }
+    &.state-réunions-de-parents {
+      border-left-color: $color-reunions-de-parents;
+      .note-category { background: $color-reunions-de-parents; color: #fff; }
+    }
+    &.state-autre {
+      border-left-color: $color-autre;
+      .note-category { background: $color-autre; color: #fff; }
+    }
+
+    // ── Contenu ──
+    .note-content-wrapper {
+      flex: 1;
+      min-width: 0; // évite le débordement du texte
+
+      .note-header {
+        display:       flex;
+        flex-wrap:     wrap;
+        gap:           0.5rem;
+        font-size:     0.75rem;
+        margin-bottom: 0.5rem;
+        opacity:       0.85;
+
+        .note-category {
+          padding:        2px 8px;
+          border-radius:  4px;
+          color:          #fff;
+          font-weight:    700;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+        }
+      }
+
+      .note-text {
+        font-size: 0.95rem;
+        color:     $text-primary;
+        word-break: break-word;
+      }
+    }
+
+    // ── Actions (edit / delete) ─────────────────────────
+    .note-actions {
+      display:        flex;
+      gap:            0.4rem;
+      flex-shrink:    0;
+      opacity:        0;
+      pointer-events: none;
+      transition:     opacity 0.2s;
+
+      .action-btn {
+        display:        flex;
+        align-items:    center;
+        justify-content: center;
+        width:          32px;
+        height:         32px;
+        background:     rgba(255, 255, 255, 0.05);
+        border:         1px solid $border;
+        border-radius:  6px;
+        color:          $text-muted;
+        cursor:         pointer;
+        transition:     $transition;
+        padding:        0;
+
+        svg, i {
+          pointer-events: none;
+          width:          15px;
+          height:         15px;
+        }
+
+        // ── Bouton Éditer ──
+        &.edit:hover {
+          background:   rgba(59, 130, 246, 0.15);
+          border-color: rgba(59, 130, 246, 0.5);
+          color:        #3b82f6;
+          transform:    scale(1.1);
+        }
+
+        // ── Bouton Supprimer ──
+        &.delete {
+          &:hover {
+            background:   rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.5);
+            color:        #ef4444;
+            transform:    scale(1.1);
+          }
+
+          // État de confirmation (classe JS à ajouter)
+          &.confirm {
+            background:   rgba(239, 68, 68, 0.25);
+            border-color: #ef4444;
+            color:        #ef4444;
+            animation:    pulse-danger 0.6s ease infinite alternate;
+          }
+        }
+      }
+    }
+  }
+}
+
+.delete-note-btn {
+  background: rgba(239, 68, 68, 0.1);
+  border: none;
+  color: $accent-red;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  &:hover { background: $accent-red; color: white; }
+}
+
+// ── Animation danger ──────────────────────────────────────
+@keyframes pulse-danger {
+  from { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  to   { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.35); }
+}
+
+.note-header {
+  color: white;
+}
+/* Style pour la ConfirmModal - Format compact */
+.confirm-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px); // Effet glass pour matcher le reste
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 1rem;
+}
+
+.confirm-modal{
+  height: 13rem;
+}
+
+.modal-overlay{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.confirm-modal-content {
+  background: #1a2235; // Ton de surface sombre
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 400px;    /* Largeur limitée */
+  height: auto;        /* Hauteur automatique selon le contenu */
+  max-height: 90vh;
+  padding: 1.5rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  animation: modalScale 0.2s ease-out;
+
+  h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: #f1f5f9;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #94a3b8;
+    line-height: 1.5;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+
+    button {
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+  }
+}
+
+@keyframes modalScale {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import NoteService from '../../services/NoteService';
 import Note from './Note';
+import { useJournal } from '../../hooks/useJournal';
+import './NoteSection.scss';
 
-// Fonction utilitaire pour formater la date au format YYYY-MM-DD
 const formatDate = (date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -10,7 +11,18 @@ const formatDate = (date) => {
     return `${year}-${month}-${day}`;
 };
 
+const STATE_LABELS = {
+    'todo':                 'À faire (TODO)',
+    'cap':                  'CAP',
+    'conseil-de-classe':    'Conseil de classe',
+    'réunions-de-parents':  'Réunion parents',
+    'autre':                'Autre',
+};
+
 const NotesSection = () => {
+    const { currentJournal } = useJournal();
+    const journalId = currentJournal?.id;
+
     const [notes, setNotes] = useState([]);
     const [newNoteText, setNewNoteText] = useState('');
     const [newNoteState, setNewNoteState] = useState('autre');
@@ -19,80 +31,58 @@ const NotesSection = () => {
     const [newNoteLocation, setNewNoteLocation] = useState('');
     const [loading, setLoading] = useState(true);
 
-    // Récupération des notes
     const fetchNotes = useCallback(async () => {
+        if (!journalId) return;
         try {
             setLoading(true);
-            const response = await NoteService.getNotes();
-            // On gère le cas où l'API renvoie { data: [...] } ou directement [...]
+            const response = await NoteService.getNotes(journalId);
             const fetchedNotes = Array.isArray(response) ? response : (response?.data || []);
             setNotes(fetchedNotes);
         } catch (error) {
-            console.error("Erreur lors de la récupération des notes:", error);
+            console.error("Erreur notes:", error);
             setNotes([]);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [journalId]);
 
-    useEffect(() => {
-        fetchNotes();
-    }, [fetchNotes]);
+    useEffect(() => { fetchNotes(); }, [fetchNotes]);
 
-    // Validation : On autorise l'ajout si le texte est présent OU si une info (date/heure/local) est saisie
-    const isFormInvalid = !newNoteText.trim() && !newNoteTime && !newNoteLocation;
+    const isFormInvalid = !newNoteText.trim();
 
-    const handleAddNote = async (event) => {
-        event.preventDefault();
-
-        if (isFormInvalid) return;
-
+    const handleAddNote = async (e) => {
+        e.preventDefault();
+        if (isFormInvalid || !journalId) return;
         try {
             const response = await NoteService.addNote(
+                journalId,
                 newNoteText,
                 newNoteState,
                 newNoteDate,
                 newNoteTime,
                 newNoteLocation
             );
-
-            // On récupère la nouvelle note (souvent dans response.data)
-            const newNote = response?.data || response;
-
-            setNotes(prevNotes => [newNote, ...prevNotes]);
-
-            // Reset du formulaire
+            setNotes(prev => [response?.data || response, ...prev]);
             setNewNoteText('');
             setNewNoteState('autre');
             setNewNoteDate(formatDate(new Date()));
             setNewNoteTime('');
             setNewNoteLocation('');
         } catch (error) {
-            console.error("Erreur lors de l'ajout de la note:", error);
+            console.error(error);
         }
     };
 
-    const handleDeleteNote = async (id) => {
-        try {
-            await NoteService.deleteNote(id);
-            setNotes(prevNotes => prevNotes.filter((note) => note.id !== id));
-        } catch (error) {
-            console.error("Erreur lors de la suppression de la note:", error);
-        }
-    };
-
-    const handleUpdateNote = (updatedNote) => {
-        setNotes(prevNotes => prevNotes.map(note => note.id === updatedNote.id ? updatedNote : note));
-    };
-
-    if (loading) {
-        return <div className="dashboard-section loading"><p>Chargement des notes...</p></div>;
-    }
+    if (!journalId) return (
+        <div className="dashboard-section">
+            <p>Sélectionnez un journal.</p>
+        </div>
+    );
 
     return (
         <div className="dashboard-section notes-section">
             <div className="section-header">
-                <h2>📌 Notes rapides</h2>
+                <h2>📌 Notes & Tâches ({currentJournal.name})</h2>
             </div>
 
             <div className="notes-widget">
@@ -100,70 +90,60 @@ const NotesSection = () => {
                     <textarea
                         value={newNoteText}
                         onChange={(e) => setNewNoteText(e.target.value)}
-                        placeholder="Une idée, un rappel..."
-                        rows="2"
+                        placeholder="Une idée ou une tâche à faire..."
                     />
 
-                    <div className="note-controls">
-                        <div className="input-row">
-                            <select
-                                className={`note-state-select state-${newNoteState.replace(/\s+/g, '-').toLowerCase()}`}
-                                value={newNoteState}
-                                onChange={(e) => setNewNoteState(e.target.value)}
-                            >
-                                <option value="autre">Autre</option>
-                                <option value="cap">CAP</option>
-                                <option value="conseil de classe">Conseil de classe</option>
-                                <option value="réunions de parents">Réunions de parents</option>
-                            </select>
+                    <div className="note-form-grid">
+                        <select
+                            className={`state-select state-${newNoteState.replace(/\s+/g, '-')}`}
+                            value={newNoteState}
+                            onChange={(e) => setNewNoteState(e.target.value)}
+                        >
+                            <option value="autre">Autre</option>
+                            <option value="todo">À faire (TODO)</option>
+                            <option value="cap">CAP</option>
+                            <option value="conseil-de-classe">Conseil de classe</option>
+                            <option value="réunions-de-parents">Réunion parents</option>
+                        </select>
 
-                            <input
-                                type="date"
-                                className="note-date-input"
-                                value={newNoteDate}
-                                onChange={(e) => setNewNoteDate(e.target.value)}
-                            />
-                        </div>
+                        <input
+                            type="date"
+                            value={newNoteDate}
+                            onChange={(e) => setNewNoteDate(e.target.value)}
+                        />
+                        <input
+                            type="time"
+                            value={newNoteTime}
+                            onChange={(e) => setNewNoteTime(e.target.value)}
+                        />
+                        <input
+                            type="text"
+                            placeholder="Lieu"
+                            value={newNoteLocation}
+                            onChange={(e) => setNewNoteLocation(e.target.value)}
+                        />
 
-                        <div className="input-row">
-                            <input
-                                type="time"
-                                className="note-time-input"
-                                value={newNoteTime}
-                                onChange={(e) => setNewNoteTime(e.target.value)}
-                            />
-                            <input
-                                type="text"
-                                className="note-location-input"
-                                value={newNoteLocation}
-                                onChange={(e) => setNewNoteLocation(e.target.value)}
-                                placeholder="Local"
-                            />
-                            <button
-                                type="submit"
-                                className="add-note-btn"
-                                disabled={isFormInvalid}
-                            >
-                                Ajouter
-                            </button>
-                        </div>
+                        <button type="submit" className="add-note-btn" disabled={isFormInvalid}>
+                            Ajouter
+                        </button>
                     </div>
                 </form>
 
                 <div className="notes-list-container">
-                    {notes && notes.length > 0 ? (
-                        notes.map((note) => (
+                    {loading ? (
+                        <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Chargement...</p>
+                    ) : notes.length === 0 ? (
+                        <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Aucune note pour ce journal.</p>
+                    ) : (
+                        notes.map(note => (
                             <Note
                                 key={note.id}
                                 note={note}
-                                onDelete={handleDeleteNote}
-                                onUpdate={handleUpdateNote}
+                                stateLabel={STATE_LABELS[note.state] || note.state || 'Autre'}
+                                onDelete={fetchNotes}
+                                onUpdate={fetchNotes}
                             />
                         ))
-                    ) : (
-                        <div className="empty-notes-message">
-                            <p>Aucune note pour le moment.</p>
-                        </div>
                     )}
                 </div>
             </div>
