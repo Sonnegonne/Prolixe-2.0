@@ -37,6 +37,7 @@ import { useJournal } from '../../hooks/useJournal';
 import { useClasses } from '../../hooks/useClasses';
 import { useHolidays } from '../../hooks/useHolidays';
 import { useToast } from '../../hooks/useToast';
+import { useLocation } from 'react-router-dom';
 import JournalService from '../../services/JournalService';
 import ScheduleService from '../../services/ScheduleService';
 import ConfirmModal from '../ConfirmModal';
@@ -113,6 +114,7 @@ const getClassColor = (subject, classLevel) => {
 // Main weekly view
 // ---------------------------------------------------------------------------
 const JournalView = ({ journalId, isArchived }) => {
+    const location = useLocation();
     const { success, error: showError } = useToast();
     const { classes } = useClasses(journalId);
     const { getHolidayForDate, holidays, loading: loadingHolidays } = useHolidays();
@@ -405,6 +407,24 @@ const JournalView = ({ journalId, isArchived }) => {
 
         setShowJournalModal(true);
     }, [getSession, slotsByDay]);
+
+    useEffect(() => {
+        const { openSlotId, weekDate } = location.state || {};
+
+        if (openSlotId && !loadingSlots && Object.keys(slots).length > 0) {
+            const slotToOpen = Object.values(slots).find(s =>
+                String(s.slot_id || s.id) === String(openSlotId)
+            );
+
+            const dayToOpen = weekDays.find(d => d.key === weekDate);
+
+            if (slotToOpen && dayToOpen) {
+                handleOpenModal(slotToOpen, dayToOpen);
+                // On "nettoie" l'état
+                window.history.replaceState({}, document.title);
+            }
+        }
+    }, [location.state, slots, loadingSlots, weekDays, handleOpenModal]);
 
     const handleCloseModal = useCallback(() => {
         setShowJournalModal(false);

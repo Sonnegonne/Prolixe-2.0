@@ -1,12 +1,8 @@
 import React from 'react';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
 
-const TodayScheduleSection = ({ todaySchedule, holidayInfo, getClassColor, classes, loading }) => {
-    if (loading) {
-        todaySchedule.sort((a,b) => parseInt(a.time_slot_id) - parseInt(b.time_slot_id));
-        return <div className="loading-message">Chargement de l'emploi du temps...</div>;
-    }
+const TodayScheduleSection = ({ todaySchedule, holidayInfo, getClassColor, classes, loading, onSlotClick }) => {
+
+    if (loading) return <div className="loading-message">Chargement de l'emploi du temps...</div>;
 
     if (holidayInfo) {
         return (
@@ -21,7 +17,7 @@ const TodayScheduleSection = ({ todaySchedule, holidayInfo, getClassColor, class
         );
     }
 
-    if (todaySchedule.length === 0) {
+    if (!todaySchedule || todaySchedule.length === 0) {
         return (
             <div className="daily-schedule-section">
                 <h2>Votre journée d'aujourd'hui</h2>
@@ -30,43 +26,54 @@ const TodayScheduleSection = ({ todaySchedule, holidayInfo, getClassColor, class
         );
     }
 
+    const sortedSchedule = [...todaySchedule].sort((a, b) =>
+        parseInt(a.time_slot_id) - parseInt(b.time_slot_id)
+    );
+
     return (
         <div className="daily-schedule-section">
             <h2>Votre journée d'aujourd'hui</h2>
             <div className="daily-schedule-list">
-                {todaySchedule.map(courseInSchedule => {
-                    const classInfo = classes.find(c => c.id === courseInSchedule.classId);
-                    const specialStatusNote = courseInSchedule.journalEntry?.notes;
+                {sortedSchedule.map(course => {
+                    const classInfo = classes.find(c => c.id === course.class_id);
+                    const borderColor = course.isCancelled ? 'var(--red-danger)' : (course.isExam || course.isHoliday) ? 'var(--accent-orange)' : (course.subject_color || '#ccc');
 
-                    let journalPreview = { text: null, className: '' };
-                    if (courseInSchedule.journalEntry && !courseInSchedule.isCancelled && !courseInSchedule.isExam && !courseInSchedule.isHoliday) {
-                        const workText = courseInSchedule.journalEntry.actual_work || courseInSchedule.journalEntry.planned_work;
-                        journalPreview.text = courseInSchedule.isInterro ? workText.replace('[INTERRO]', '').trim() : workText;
-                        journalPreview.className = courseInSchedule.journalEntry.actual_work ? 'actual-work' : 'planned-work';
+                    let preview = { text: null, className: '' };
+                    const entry = course.journalEntry;
+                    if (entry && !course.isCancelled && !course.isExam && !course.isHoliday) {
+                        const work = entry.actual_work || entry.planned_work;
+                        preview.text = course.isInterro ? work?.replace('[INTERRO]', '').trim() : work;
+                        preview.className = entry.actual_work ? 'actual-work' : 'planned-work';
                     }
 
                     return (
-                        <div key={courseInSchedule.id}
-                             className={`daily-journal-slot ${courseInSchedule.isCancelled ? 'is-cancelled' : ''} ${courseInSchedule.isExam ? 'is-exam' : ''} ${courseInSchedule.isHoliday ? 'is-holiday' : ''} ${courseInSchedule.isInterro ? 'is-interro' : ''}`}
-                             style={{ borderColor: courseInSchedule.isCancelled ? 'var(--red-danger)' : (courseInSchedule.isExam || courseInSchedule.isHoliday) ? 'var(--accent-orange)' : getClassColor(courseInSchedule.subject, courseInSchedule.classLevel) }}>
-                            {courseInSchedule.isHoliday ? (
-                                <div className="cancellation-display holiday-display"><span className="cancellation-icon">🌴</span><p className="cancellation-label">Vacances - Férié</p><p className="cancellation-reason">{specialStatusNote}</p></div>
-                            ) : courseInSchedule.isCancelled ? (
-                                <div className="cancellation-display"><span className="cancellation-icon">🚫</span><p className="cancellation-label">ANNULÉ</p><p className="cancellation-reason">{specialStatusNote}</p></div>
-                            ) : courseInSchedule.isExam ? (
-                                <div className="cancellation-display exam-display"><span className="cancellation-icon">✍️</span><p className="cancellation-label">EXAMEN</p><p className="cancellation-reason">{specialStatusNote}</p></div>
+                        <div key={course.slot_id || course.id}
+                             className="daily-journal-slot clickable"
+                             style={{ borderColor }}
+                             onClick={() => onSlotClick(course)}>
+
+                            {course.isHoliday ? (
+                                <div className="cancellation-display holiday-display"><span className="cancellation-icon">🌴</span><p>Vacances</p></div>
+                            ) : course.isCancelled ? (
+                                <div className="cancellation-display"><span className="cancellation-icon">🚫</span><p>ANNULÉ</p></div>
                             ) : (
                                 <div className="course-summary">
-                                    <div className="course-info-header"><span className="course-time-display">{courseInSchedule.time_slot_libelle}</span><span className="course-class-display">{classInfo?.name || 'Classe inconnue'}</span></div>
-                                    <div className="course-details">
-                                        <div className="course-title-display">{courseInSchedule.subject}</div>
-                                        <div className="course-room-display">{courseInSchedule.room}</div>
+                                    <div className="course-info-header">
+                                        <span className="course-time-display">{course.time_label}</span>
+                                        <span className="course-class-display">{course.class_name || classInfo?.name}</span>
                                     </div>
-                                    {journalPreview.text && (<div className={`journal-entry-preview ${journalPreview.className}`}><span className="preview-icon"></span>
-                                        <p className="preview-text">
-                                            {courseInSchedule.isInterro && <span className="interro-prefix">Interro : </span>}
-                                            {journalPreview.text}</p>
-                                    </div>)}
+                                    <div className="course-details">
+                                        <div className="course-title-display">{course.subject_name}</div>
+                                        <div className="course-room-display">{course.room}</div>
+                                    </div>
+                                    {preview.text && (
+                                        <div className={`journal-entry-preview ${preview.className}`}>
+                                            <p className="preview-text">
+                                                {course.isInterro && <strong>Interro : </strong>}
+                                                {preview.text}
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

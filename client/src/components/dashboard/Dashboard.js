@@ -1,125 +1,167 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../hooks/useAuth';
+import { useClasses } from '../../hooks/useClasses';
 import { useJournal } from '../../hooks/useJournal';
+import { useSchedule } from '../../hooks/useSchedule';
+import { useHolidays } from '../../hooks/useHolidays';
+import { useScheduleHours } from '../../hooks/useScheduleHours';
+import { format, parseISO, isWithinInterval } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
+
 import './dashboard.scss';
 import './dashboard_mobile.scss';
 import NoteSection from './NoteSection';
+import TodayScheduleSection from './TodayScheduleSection';
 
 const Dashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
-
     const {
-        journals,
         currentJournal,
-        selectJournal,
+        assignments,
+        fetchAssignments,
+        journalEntries,
+        fetchJournalEntries,
         loadAllJournals,
         loading: loadingJournal
     } = useJournal();
 
+    const journalId = currentJournal?.id;
+    const today = useMemo(() => new Date(), []);
+    const todayStr = format(today, 'yyyy-MM-dd');
+
+    const { classes, loading: loadingClasses, getClassColor } = useClasses(journalId);
+    const { getHolidayForDate, loading: loadingHolidays } = useHolidays();
+    const { hours, loading: loadingHours } = useScheduleHours();
+
+    // Logique d'horaire
+    const [activeSetId, setActiveSetId] = useState(null);
+    const { slots, availableSets, loading: loadingSlots, fetchSlots, fetchAllSets } = useSchedule(activeSetId);
+
     useEffect(() => {
-        loadAllJournals();
-    }, [loadAllJournals]);
-
-    const availableJournals = useMemo(() => journals, [journals]);
-
-    const handleJournalChange = (e) => {
-        const journalId = parseInt(e.target.value);
-        const selected = journals.find(j => j.id === journalId);
-        if (selected) {
-            selectJournal(selected);
+        if (journalId) {
+            fetchAllSets(journalId);
+            loadAllJournals();
         }
+    }, [journalId, fetchAllSets, loadAllJournals]);
 
+    useEffect(() => {
+        const sets = Array.isArray(availableSets) ? availableSets : (availableSets?.data || []);
+        if (sets.length > 0) {
+            const currentSet = sets.find(set => {
+                try {
+                    if (!set.start_time || !set.end_time) return false;
+                    return isWithinInterval(today, {
+                        start: parseISO(set.start_time),
+                        end: parseISO(set.end_time)
+                    });
+                } catch (e) { return false; }
+            });
+            if (currentSet && currentSet.id !== activeSetId) {
+                setActiveSetId(currentSet.id);
+            }
+        }
+    }, [availableSets, today, activeSetId]);
+
+    useEffect(() => {
+        if (activeSetId) {
+            fetchSlots();
+            fetchAssignments();
+            fetchJournalEntries(todayStr, todayStr);
+        }
+    }, [activeSetId, fetchSlots, fetchAssignments, fetchJournalEntries, todayStr]);
+
+    const holidayInfo = getHolidayForDate(today);
+
+    const todaySchedule = useMemo(() => {
+        if (holidayInfo || !slots || Object.keys(slots).length === 0) return [];
+        const dayIndex = today.getDay(); // 1=Lundi...
+
+        return Object.values(slots)
+            .filter(slot => parseInt(slot.day_of_week) === dayIndex)
+            .map(slot => {
+                const journalEntry = journalEntries.find(entry =>
+                    String(entry.schedule_slot_id) === String(slot.id || slot.slot_id) &&
+                    entry.date === todayStr
+                );
+                return {
+                    ...slot,
+                    journalEntry,
+                    isCancelled: journalEntry?.actual_work === '[CANCELLED]',
+                    isExam: journalEntry?.actual_work === '[EXAM]',
+                    isHoliday: journalEntry?.actual_work === '[HOLIDAY]',
+                    isInterro: journalEntry?.actual_work?.startsWith('[INTERRO]'),
+                };
+            })
+            .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
+    }, [slots, journalEntries, todayStr, holidayInfo, today]);
+
+    // REDIRECTION VERS LE JOURNAL AVEC OUVERTURE MODAL
+    const handleSlotClick = (course) => {
+        navigate('/journal', {
+            state: {
+                weekDate: todayStr,
+                openSlotId: course.slot_id || course.id
+            }
+        });
     };
 
-    if (!user) {
-        return (
-            <div className="dashboard-page">
-                <div className="loading-message">Chargement de votre session...</div>
-            </div>
-        );
-    }
+    const stats = useMemo(() => {
+        const safeAssignments = Array.isArray(assignments) ? assignments : [];
 
-    if (!loadingJournal && journals.length === 0) {
-        return (
-            <div className="dashboard-page">
-                <div className="dashboard-header">
-                    <h1>Bonjour {user.firstname} !</h1>
-                </div>
-                <div className="no-journal-container">
-                    <div className="error-card">
-                        <div className="error-icon-wrapper">📁</div>
-                        <h2>Aucun journal trouvé</h2>
-                        <p>Vous devez créer un journal de classe pour commencer à utiliser Prolixe.</p>
-                        <button
-                            className="btn-primary"
-                            onClick={() => navigate('/settings', { state: { activeTab: 'journals' } })}
-                        >
-                            ➕ Créer mon premier journal
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+        // Devoirs à venir (non complétés)
+        const upcoming = safeAssignments.filter(a => !a.is_completed);
+
+        // Devoirs corrigés (complétés ET corrigés)
+        const corrected = safeAssignments.filter(a => a.is_completed && a.is_corrected);
+
+        return [
+            { title: 'Total Classes', value: classes.length, icon: '🏫', color: 'primary' },
+            { title: 'Cours aujourd\'hui', value: todaySchedule.length, icon: '📚', color: 'info' },
+            { title: 'Devoirs à venir', value: upcoming.length, icon: '📝', color: 'warning' },
+            { title: 'Devoirs corrigés', value: corrected.length, icon: '✅', color: 'success' } // La nouvelle stat
+        ];
+    }, [classes, todaySchedule, assignments]);
+
+    const isLoading = loadingClasses || loadingJournal || loadingSlots || loadingHolidays;
+
+    if (!user) return <div className="loading-message">Chargement...</div>;
 
     return (
         <div className="dashboard-page">
             <div className="dashboard-header">
-                <div className="header-greeting">
-                    <h1>Bonjour {user.firstname} !</h1>
-                    <p className="subtitle">Heureux de vous revoir sur votre espace de travail : <strong className="school_year">{currentJournal?.year_label}</strong></p>
-                </div>
-
-                <div className="journal-context-selector">
-                    <div className="selector-label">
-                        <span>Journal actif</span>
-                    </div>
-                    <div className="select-wrapper">
-                        <select
-                            id="journal-select"
-                            value={currentJournal?.id || ''}
-                            onChange={handleJournalChange}
-                            className="custom-journal-select"
-                            disabled={loadingJournal}
-                        >
-                            {!currentJournal && <option value="">Choisir un journal...</option>}
-                            {availableJournals.map(j => (
-                                <option key={j.id} value={j.id}>
-                                    {j.name} {j.is_archived ? ' (Archivé)' : ''}
-                                </option>
-                            ))}
-                        </select>
-                        <span className="select-arrow">▾</span>
-                    </div>
-                </div>
+                <h1>DACH-GPT | {user.firstname}</h1>
             </div>
 
             <div className="dashboard-content">
-                {currentJournal ? (
-                    <div className="dashboard-columns">
-
-                        <div className="column main-column">
-                            {!!currentJournal.is_archived && (
-                                <div className="archive-banner">
-                                    <div className="banner-text">
-                                        <strong>Mode consultation</strong>
-                                        <p>Ce journal est archivé. Les modifications sont désactivées.</p>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="column side-column">
-
+                <div className="dashboard-columns">
+                    <div className="column main-column">
+                        <TodayScheduleSection
+                            todaySchedule={todaySchedule}
+                            holidayInfo={holidayInfo}
+                            getClassColor={getClassColor}
+                            classes={classes}
+                            loading={isLoading && !activeSetId}
+                            onSlotClick={handleSlotClick}
+                        />
+                    </div>
+                    <div className="column side-column">
+                        <NoteSection />
+                    </div>
+                </div>
+            </div>
+            {/* Stats Grid */}
+            <div className="stats-grid">
+                {stats.map((stat, index) => (
+                    <div key={index} className={`stat-card ${stat.color}`}>
+                        <div className="stat-icon">{stat.icon}</div>
+                        <div className="stat-info">
+                            <span className="stat-value">{stat.value}</span>
+                            <span className="stat-label">{stat.title}</span>
                         </div>
                     </div>
-                ) : (
-                    <div className="no-selection-placeholder">
-                        <p>Veuillez sélectionner un journal dans le menu supérieur pour commencer.</p>
-                    </div>
-                )}
+                ))}
             </div>
         </div>
     );

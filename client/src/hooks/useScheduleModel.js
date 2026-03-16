@@ -1,5 +1,5 @@
 // client/src/hooks/useScheduleModel.js
-/*
+
 import { useState, useEffect, useCallback } from 'react';
 import ScheduleModelService from '../services/ScheduleModelService';
 
@@ -81,4 +81,4 @@ const useScheduleModel = (journalId) => {
     return { schedules, loading, error, createSchedule, deleteSchedule, duplicateSchedule, fetchSchedules };
 };
 
-export default useScheduleModel;*/
+export default useScheduleModel;
