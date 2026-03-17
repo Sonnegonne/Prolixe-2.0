@@ -37,7 +37,7 @@ const Dashboard = () => {
 
     // Logique d'horaire
     const [activeSetId, setActiveSetId] = useState(null);
-    const { slots, availableSets, loading: loadingSlots, fetchSlots, fetchAllSets } = useSchedule(activeSetId);
+    const { slots, availableSets, schedule, loading: loadingSlots, fetchSlots, fetchAllSets } = useSchedule(activeSetId);
 
     useEffect(() => {
         if (journalId) {
@@ -115,12 +115,12 @@ const Dashboard = () => {
 
         // Devoirs corrigés (complétés ET corrigés)
         const corrected = safeAssignments.filter(a => a.is_completed && a.is_corrected);
-
+        const totalWeeklySlots = slots ? Object.keys(slots).length : 0;
         return [
-            { title: 'Total Classes', value: classes.length, icon: '🏫', color: 'primary' },
+            { title: 'Total heures', value: totalWeeklySlots, icon: '🏫', color: 'primary' },
             { title: 'Cours aujourd\'hui', value: todaySchedule.length, icon: '📚', color: 'info' },
-            { title: 'Devoirs à venir', value: upcoming.length, icon: '📝', color: 'warning' },
-            { title: 'Devoirs corrigés', value: corrected.length, icon: '✅', color: 'success' } // La nouvelle stat
+            { title: 'Evaluations prévues', value: upcoming.length, icon: '📝', color: 'warning' },
+            { title: 'Corrections en attente', value: corrected.length, icon: '✅', color: 'success' } // La nouvelle stat
         ];
     }, [classes, todaySchedule, assignments]);
 
