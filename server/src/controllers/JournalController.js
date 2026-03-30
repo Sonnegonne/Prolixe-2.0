@@ -370,6 +370,7 @@ class JournalController {
 
     static async upsertJournalEntry(req, res) {
         const { id, journal_id, schedule_slot_id, date, planned_work, actual_work, notes } = req.body;
+        console.log(req.body);
 
         if (!journal_id || !schedule_slot_id || !date) {
             return res.status(400).json({ success: false, message: 'journal_id, schedule_slot_id et date sont requis.' });

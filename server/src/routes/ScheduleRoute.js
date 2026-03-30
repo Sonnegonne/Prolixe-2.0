@@ -11,6 +11,8 @@ router.post('/slots/save', ScheduleController.saveSlots);
 
 router.post('/sets/:id/duplicate', ScheduleController.duplicateScheduleSet);
 router.delete('/sets/:id', ScheduleController.deleteScheduleSet);
+router.put('/sets/:id', ScheduleController.updateScheduleSet); // Route pour modifier le nom/dates
+router.delete('/sets/:setId/slots/:day/:hourId', ScheduleController.deleteSlot); // Route pour supprimer un cours
 
 router.get('/active-set', ScheduleController.getScheduleByDate);
 

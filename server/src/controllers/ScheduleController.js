@@ -173,11 +173,48 @@ class ScheduleController {
         }
     }
 
+    // Ajouter ces deux méthodes statiques dans la classe ScheduleController
+
+    static async updateScheduleSet(req, res) {
+        const { id } = req.params;
+        const { name, start_date, end_date } = req.body;
+        const userId = req.user.id;
+
+        try {
+            await pool.execute(
+                'UPDATE SCHEDULE_SETS SET name = ?, start_time = ?, end_time = ? WHERE id = ? AND user_id = ?',
+                [name, start_date, end_date, id, userId]
+            );
+            res.json({ success: true, message: "Modèle mis à jour" });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    static async deleteSlot(req, res) {
+        const { setId, day, hourId } = req.params;
+        const userId = req.user.id;
+
+        try {
+            // Vérification de propriété par jointure
+            await pool.execute(`
+            DELETE ss FROM SCHEDULE_SLOTS ss
+            JOIN SCHEDULE_SETS s SET ON ss.schedule_set_id = s.id
+            WHERE ss.schedule_set_id = ? AND ss.day_of_week = ? 
+            AND ss.time_slot_id = ? AND s.user_id = ?`,
+                [setId, day, hourId, userId]
+            );
+            res.json({ success: true, message: "Cours supprimé" });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
     // server/src/controllers/ScheduleController.js
 
     static async duplicateScheduleSet(req, res) {
         const { id } = req.params; // ID de l'horaire à copier
-        const { newName } = req.body;
+        const { newName, start_date, end_date } = req.body;
         const userId = req.user.id;
         let connection;
 
@@ -200,8 +237,8 @@ class ScheduleController {
 
             // 2. Créer le nouveau set
             const [result] = await connection.execute(
-                'INSERT INTO SCHEDULE_SETS (user_id, journal_id, name) VALUES (?, ?, ?)',
-                [userId, journalId, newName || `Copie de ${id}`]
+                'INSERT INTO SCHEDULE_SETS (user_id, journal_id, name, start_time, end_time) VALUES (?, ?, ?, ?, ?)',
+                [userId, journalId, newName, start_date, end_date]
             );
             const newSetId = result.insertId;
 

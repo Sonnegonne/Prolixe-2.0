@@ -135,7 +135,7 @@ export const JournalProvider = ({ children }) => {
             const mappedData = {
                 id: entryData.id,
                 journal_id: currentJournal.id,
-                schedule_id: entryData.schedule_id,
+                schedule_slot_id: entryData.schedule_slot_id || entryData.schedule_id,
                 entry_date: entryData.date,           // backend attend entry_date
                 content_planned: entryData.planned_work, // backend attend content_planned
                 content_done: entryData.actual_work,     // backend attend content_done

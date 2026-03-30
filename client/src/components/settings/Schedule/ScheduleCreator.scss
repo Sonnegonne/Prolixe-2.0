@@ -212,3 +212,151 @@
     color: var(--accent);
   }
 }
+
+// Styles additionnels pour les actions du journal
+.btn-text-action {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #10b981;
+    color: white;
+  }
+}
+
+.edit-meta-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: #94a3b8;
+  padding: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  transition: 0.2s;
+
+  &:hover {
+    background: var(--accent);
+    color: white;
+  }
+}
+
+.label-with-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+
+  label {
+    margin-bottom: 0 !important;
+  }
+}
+
+.btn-danger {
+  background: rgba(239, 68, 68, 0.1) !important;
+  color: #ef4444 !important;
+  border: 1px solid rgba(239, 68, 68, 0.2) !important;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: 0.2s;
+
+  &:hover {
+    background: #ef4444 !important;
+    color: white !important;
+  }
+}
+
+.btn-secondary {
+  background: #334155;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  &:hover {
+    background: #475569;
+  }
+}
+
+.btn-clear-slot {
+  border-radius: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(239, 68, 68, 0.1); // Fond rouge très léger
+  color: #ef4444; // Couleur de l'icône X (rouge danger)
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  z-index: 10;
+
+  &:hover {
+    background: #ef4444;
+    color: white;
+    transform: scale(1.1);
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+  }
+}
+
+// Style spécifique pour l'icône à l'intérieur (Lucide React)
+.btn-clear-slot svg {
+  stroke-width: 2.5px;
+}
+
+.alert-modal {
+  max-width: 500px;
+  border: 1px solid rgba(255, 193, 7, 0.3);
+
+  .alert-title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    .text-warning { color: #ffc107; }
+  }
+
+  .modal-footer.flex-col {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    .glass-btn {
+      padding: 12px 16px;
+      height: auto;
+      line-height: 1.4;
+
+      strong {
+        display: block;
+        font-size: 0.9em;
+        text-transform: uppercase;
+        margin-bottom: 2px;
+      }
+    }
+  }
+}
+
+.warning-outline {
+  border: 1px solid rgba(255, 193, 7, 0.4);
+  background: rgba(255, 193, 7, 0.05);
+  &:hover {
+    background: rgba(255, 193, 7, 0.15);
+  }
+}
+
+.z-50 { z-index: 50; }
+

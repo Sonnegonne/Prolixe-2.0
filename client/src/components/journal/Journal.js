@@ -185,7 +185,6 @@ const JournalView = ({ journalId, isArchived }) => {
     }, [holidays]);
 
     useEffect(() => {
-        console.log("Journal bounds:", journalBounds);
         if (journalBounds && !loadingHolidays) {
             const today = new Date();
             // On vérifie si aujourd'hui est dans l'intervalle du journal (avec marge d'une semaine)
@@ -357,6 +356,7 @@ const JournalView = ({ journalId, isArchived }) => {
     const debouncedSave = useCallback((entryData) => {
         if (isArchived || !selectedSlot) return;
 
+        // On force l'ID du slot : soit celui passé en argument, soit celui du slot sélectionné
         const slotId = entryData.schedule_slot_id || selectedSlot.slot_id || selectedSlot.id;
         const key = `${slotId}-${entryData.date}`;
 
@@ -364,15 +364,18 @@ const JournalView = ({ journalId, isArchived }) => {
             if (prev[key]) clearTimeout(prev[key]);
             const id = setTimeout(async () => {
                 try {
+                    // IMPORTANT : On s'assure que schedule_slot_id est présent dans le payload
                     const payload = {
                         ...entryData,
                         journal_id: journalId,
-                        schedule_slot_id: slotId
+                        schedule_slot_id: slotId // On l'ajoute explicitement ici
                     };
 
                     const response = await JournalService.upsertJournalEntry(payload);
+
+                    // Mise à jour de l'ID de l'entrée si le backend en renvoie un nouveau
                     const newId = response?.data?.id || response?.id;
-                    if (newId && slotId === (selectedSlot.slot_id || selectedSlot.id)) {
+                    if (newId && String(slotId) === String(selectedSlot.slot_id || selectedSlot.id)) {
                         setCurrentEntryId(newId);
                     }
 
@@ -390,8 +393,6 @@ const JournalView = ({ journalId, isArchived }) => {
             return { ...prev, [key]: id };
         });
     }, [isArchived, journalId, selectedSlot, loadSessions, showError]);
-
-
     // -----------------------------------------------------------------------
     // Open journal modal
     // -----------------------------------------------------------------------
@@ -504,7 +505,12 @@ const JournalView = ({ journalId, isArchived }) => {
         else newForm = { planned_work: journalForm.planned_work, actual_work: '', notes: '' };
 
         setJournalForm(newForm);
-        debouncedSave({ id: currentEntryId, schedule_slot_id: selectedSlot.id, date: selectedDay.key, ...newForm });
+        debouncedSave({
+            id: currentEntryId,
+            schedule_slot_id: selectedSlot.slot_id || selectedSlot.id, // AJOUT ICI
+            date: selectedDay.key,
+            ...newForm
+        });
 
         const daySlots = slotsByDay[selectedDay.dayIndex] || [];
 
@@ -527,20 +533,40 @@ const JournalView = ({ journalId, isArchived }) => {
     // -----------------------------------------------------------------------
     // Cancel entire day
     // -----------------------------------------------------------------------
-    const handleCancelEntireDayChange = (e) => {
+    const handleCancelEntireDayChange = async (e) => {
         const checked = e.target.checked;
         setCancelEntireDay(checked);
+
         if (checked) {
-            (slotsByDay[selectedDay.dayIndex] || [])
-                .filter(s => s.id !== selectedSlot.id)
-                .forEach(s => {
-                    const ex = getSession(s.id, selectedDay.key);
-                    debouncedSave({ id: ex?.id || null, schedule_slot_id: s.id, date: selectedDay.key, planned_work: '', actual_work: '[CANCELLED]', notes: journalForm.notes });
-                });
-            success('Toute la journée a été marquée comme "Annulée".');
+            const daySlots = slotsByDay[selectedDay.dayIndex] || [];
+            // On filtre pour ne pas traiter le slot déjà ouvert (qui sera sauvé par le formulaire)
+            const otherSlots = daySlots.filter(s => String(s.slot_id || s.id) !== String(selectedSlot.slot_id || selectedSlot.id));
+
+            try {
+                // Utilisation de Promise.all pour envoyer toutes les requêtes en parallèle
+                // directement via JournalService pour éviter le debounce du composant
+                await Promise.all(otherSlots.map(s => {
+                    const sId = s.slot_id || s.id;
+                    const existing = getSession(sId, selectedDay.key);
+
+                    return JournalService.upsertJournalEntry({
+                        id: existing?.id || null,
+                        journal_id: journalId,
+                        schedule_slot_id: sId, // Nom attendu par le contrôleur
+                        date: selectedDay.key,
+                        planned_work: '',
+                        actual_work: '[CANCELLED]',
+                        notes: journalForm.notes
+                    });
+                }));
+
+                await loadSessions();
+                success('Toute la journée a été marquée comme "Annulée".');
+            } catch (err) {
+                showError("Erreur lors de l'annulation groupée : " + err.message);
+            }
         }
     };
-
     // -----------------------------------------------------------------------
     // Interro toggle
     // -----------------------------------------------------------------------

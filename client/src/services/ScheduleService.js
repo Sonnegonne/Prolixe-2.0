@@ -42,8 +42,28 @@ const ScheduleService = {
         return response.data;
     },
 
-    duplicateScheduleSet: async (setId, newName) => {
-        const response = await axios.post(`/schedule/sets/${setId}/duplicate`, { newName });
+    // Ajouter dans l'objet ScheduleService
+
+    updateScheduleSet: async (setId, data) => {
+        const response = await axios.put(`/schedule/sets/${setId}`, {
+            name: data.name,
+            start_date: data.startDate,
+            end_date: data.endDate
+        });
+        return response.data;
+    },
+
+    deleteSlot: async (setId, day, hourId) => {
+        const response = await axios.delete(`/schedule/sets/${setId}/slots/${day}/${hourId}`);
+        return response.data;
+    },
+
+    duplicateScheduleSet: async (setId, newName, startDate, endDate) => {
+        const response = await axios.post(`/schedule/sets/${setId}/duplicate`, {
+            newName: newName,
+            start_date: startDate, // Doit matcher le req.body du backend
+            end_date: endDate
+        });
         return response.data;
     },
 
