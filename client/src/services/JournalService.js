@@ -82,11 +82,9 @@ class JournalService {
      * Récupère les devoirs et évaluations.
      */
     static async getAssignments(journalId, startDate = null, endDate = null) {
-        if (!journalId) {
-            throw new Error("journal_id est requis");
-        }
+        if (!journalId) throw new Error("journal_id est requis");
 
-        const params = { journal_id: journalId, startDate, endDate};
+        const params = { journal_id: journalId };
         if (startDate) params.startDate = startDate;
         if (endDate) params.endDate = endDate;
 

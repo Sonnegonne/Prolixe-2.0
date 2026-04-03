@@ -113,14 +113,15 @@ const Dashboard = () => {
         // Devoirs à venir (non complétés)
         const upcoming = safeAssignments.filter(a => !a.is_completed);
 
-        // Devoirs corrigés (complétés ET corrigés)
-        const corrected = safeAssignments.filter(a => a.is_completed && a.is_corrected);
+        // Devoirs corrigés (complétés ET !corrigés)
+        const waiting = safeAssignments.filter(a => a.is_completed && !a.is_corrected);
+
         const totalWeeklySlots = slots ? Object.keys(slots).length : 0;
         return [
             { title: 'Total heures', value: totalWeeklySlots, icon: '🏫', color: 'primary' },
             { title: 'Cours aujourd\'hui', value: todaySchedule.length, icon: '📚', color: 'info' },
             { title: 'Evaluations prévues', value: upcoming.length, icon: '📝', color: 'warning' },
-            { title: 'Corrections en attente', value: corrected.length, icon: '✅', color: 'success' } // La nouvelle stat
+            { title: 'Corrections en attente', value: waiting.length, icon: '✅', color: 'success' }
         ];
     }, [classes, todaySchedule, assignments]);
 

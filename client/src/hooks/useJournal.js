@@ -104,7 +104,7 @@ export const JournalProvider = ({ children }) => {
         }
     }, [currentJournal]);
 
-    const fetchAssignments = useCallback(async (classId, startDate, endDate) => {
+    const fetchAssignments = useCallback(async (startDate, endDate) => {
         if (!currentJournal) {
             setAssignments([]);
             return;
@@ -112,17 +112,15 @@ export const JournalProvider = ({ children }) => {
         setLoading(true);
         setError(null);
         try {
-            /*
-            let response = await JournalService.getAssignments(currentJournal.id, classId, startDate, endDate);
-            response = response.data;
-            setAssignments(response.data || []);*/
+            // Suppression de classId qui décalait les arguments
+            let response = await JournalService.getAssignments(currentJournal.id, startDate, endDate);
+            setAssignments(response.data.data || []);
         } catch (err) {
             setError(err.message || 'Erreur lors de la récupération des devoirs.');
         } finally {
             setLoading(false);
         }
     }, [currentJournal]);
-
     /**
      * ADAPTATION : Mappage des champs pour correspondre au JournalController SQL
      */

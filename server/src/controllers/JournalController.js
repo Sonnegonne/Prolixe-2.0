@@ -548,19 +548,29 @@ class JournalController {
     static async getAssignments(req, res) {
         const { journal_id, startDate, endDate } = req.query;
 
-        if (!journal_id || !startDate || !endDate) {
-            return res.status(400).json({ success: false, message: 'journal_id, startDate et endDate sont requis.' });
+        if (!journal_id) {
+            return res.status(400).json({ success: false, message: 'journal_id est requis.' });
         }
 
         try {
             const assignments = await JournalController.withConnection(async (db) => {
-                const [rows] = await db.execute(`
+                let sql = `
                     SELECT a.*, c.name AS class_name 
                     FROM ASSIGNMENTS a
                     JOIN CLASSES c ON a.class_id = c.id
-                    WHERE a.journal_id = ? AND a.due_date BETWEEN ? AND ?
-                    ORDER BY a.due_date ASC
-                `, [journal_id, startDate, endDate]);
+                    WHERE a.journal_id = ?
+                `;
+                const params = [journal_id];
+
+                // Filtre optionnel par date
+                if (startDate && endDate) {
+                    sql += ` AND a.due_date BETWEEN ? AND ?`;
+                    params.push(startDate, endDate);
+                }
+
+                sql += ` ORDER BY a.due_date ASC`;
+
+                const [rows] = await db.execute(sql, params);
                 return rows;
             });
             res.json({ success: true, data: assignments });
