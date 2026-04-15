@@ -2,7 +2,7 @@
 
 import {useAuth} from "../hooks/useAuth";
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || '/GPT/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || '/GPT/api/';
 //const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://217.154.117.102/api';
 
 class ApiService {

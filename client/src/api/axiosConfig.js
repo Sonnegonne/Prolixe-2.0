@@ -3,7 +3,7 @@ import axios from 'axios';
 
 const apiClient = axios.create({
     //baseURL: 'http://217.154.117.102/api',
-    baseURL: '/GPT/api'
+    baseURL: '/GPT/api/'
 });
 
 // Intercepteur pour ajouter le token JWT à chaque requête
