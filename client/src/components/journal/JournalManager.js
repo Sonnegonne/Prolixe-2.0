@@ -1,11 +1,10 @@
-// client/src/components/settings/Journal/JournalManager.js
 import React, { useState, useMemo } from 'react';
 import { useJournal } from '../../hooks/useJournal';
 import { useSchoolYears } from '../../hooks/useSchoolYear';
 import { useToast } from '../../hooks/useToast';
 import ConfirmModal from '../ConfirmModal';
 import JournalService from '../../services/JournalService';
-import { BookMarked, Download } from 'lucide-react';
+import { BookMarked, Download, Plus, FileJson } from 'lucide-react';
 import './JournalManager.scss';
 
 const JournalManager = () => {
@@ -18,12 +17,11 @@ const JournalManager = () => {
         archiveJournal,
         deleteArchivedJournal,
         clearJournal,
-        exportJournal,
         loading: journalLoading,
         loadAllJournals,
     } = useJournal();
 
-    const { schoolYears, loading: schoolYearsLoading, error: schoolYearsError } = useSchoolYears();
+    const { schoolYears } = useSchoolYears();
     const { success, error: showError } = useToast();
 
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -33,7 +31,7 @@ const JournalManager = () => {
         title: '',
         message: '',
         onConfirm: null,
-        successMessage: '' // Ajout d'un message personnalisé en cas de succès
+        successMessage: ''
     });
 
     const [selectedFile, setSelectedFile] = useState(null);
@@ -80,7 +78,6 @@ const JournalManager = () => {
         }
     };
 
-    // Helper pour configurer la modal avec un message de succès
     const showConfirm = (title, message, onConfirm, successMessage) => {
         setConfirmModal({ isOpen: true, title, message, onConfirm, successMessage });
     };
@@ -112,21 +109,25 @@ const JournalManager = () => {
         return (
             <div className={`journal-card ${isArchived ? 'archived' : ''} ${isSelected ? 'current' : ''}`}>
                 <div className="journal-info">
-                    <strong>{journal.name}</strong>
-                    <span>{journal.year_label}</span>
-                    {hasEntries && <small>{journal.entries_count} entrée(s)</small>}
+                    <div className="title-row">
+                        <strong>{journal.name}</strong>
+                        {isSelected && !isArchived && <span className="status-badge current">Actif</span>}
+                        {isSelected && isArchived && <span className="status-badge selected">Visualisé</span>}
+                    </div>
+                    <div className="meta-row">
+                        <span>{journal.year_label}</span>
+                        {hasEntries && <small>{journal.entries_count} entrée(s)</small>}
+                    </div>
                 </div>
+
                 <div className="journal-actions">
                     <button
                         onClick={() => handleExport(journal.id, journal.name)}
-                        className="btn-export"
-                        title="Exporter les données"
+                        className="btn-export-icon"
+                        title="Exporter"
                     >
                         <Download size={18} />
                     </button>
-
-                    {isSelected && !isArchived && <span className="status-badge current">Actif</span>}
-                    {isSelected && isArchived && <span className="status-badge selected">Visualisé</span>}
 
                     {!isSelected && (
                         <button onClick={() => selectJournal(journal)} className="btn-select">
@@ -141,7 +142,7 @@ const JournalManager = () => {
                                     'Vider le journal',
                                     `Vider ${journal.name} ? Cette action est irréversible.`,
                                     () => clearJournal(journal.id),
-                                    'Journal vidé avec succès.'
+                                    'Journal vidé.'
                                 )}
                                 className="btn-clear"
                                 disabled={!hasEntries}
@@ -183,85 +184,85 @@ const JournalManager = () => {
 
     return (
         <div className="journal-manager">
-            {/* ... section-header et journal-lists identiques ... */}
             <div className="section-header">
                 <h2><BookMarked /> Gestion des Journaux</h2>
-                <div className="file-container">
-                    <div className="import-section">
+                <div className="controls-container">
+                    <div className="import-box">
                         <select
                             value={importTargetJournalId}
                             onChange={(e) => setImportTargetJournalId(e.target.value)}
-                            className="btn-select"
+                            className="select-target"
                         >
                             <option value="">Importer dans...</option>
                             {activeJournals.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
                         </select>
                         <input type="file" id="import-input" accept=".json" onChange={handleFileChange} hidden />
-                        <label htmlFor="import-input" className="file-input-label">📁 {selectedFile ? selectedFile.name : 'Choisir un fichier'}</label>
+                        <label htmlFor="import-input" className="file-label">
+                            <FileJson size={16} /> <span>{selectedFile ? selectedFile.name : 'JSON'}</span>
+                        </label>
                         {selectedFile && (
-                            <button className="btn-primary" onClick={handleImport} disabled={isImporting}>
-                                {isImporting ? '...' : 'Lancer Import'}
+                            <button className="btn-run-import" onClick={handleImport} disabled={isImporting || !importTargetJournalId}>
+                                OK
                             </button>
                         )}
                     </div>
-                    <button className="btn-primary" onClick={() => setIsModalOpen(true)}><span>➕</span> Ajouter un journal</button>
+                    <button className="btn-add-journal" onClick={() => setIsModalOpen(true)}>
+                        <Plus size={18} /> <span>Nouveau</span>
+                    </button>
                 </div>
             </div>
 
             <div className="journal-lists">
-                <div className="journal-list">
+                <section className="list-group">
                     <h3>Journal sélectionné</h3>
-                    {currentJournal ? <JournalCard journal={currentJournal} type={currentJournal.is_archived ? 'archived' : 'active'} /> : <p>Aucune sélection.</p>}
-                </div>
+                    {currentJournal ? <JournalCard journal={currentJournal} type={currentJournal.is_archived ? 'archived' : 'active'} /> : <p className="empty-msg">Aucune sélection.</p>}
+                </section>
 
-                <div className="journal-list">
+                <section className="list-group">
                     <h3>Autres journaux actifs</h3>
                     {otherActiveJournals.length > 0 ?
                         otherActiveJournals.map(j => <JournalCard key={j.id} journal={j} type="active" />)
-                        : <p>Aucun autre journal actif.</p>
+                        : <p className="empty-msg">Aucun autre journal actif.</p>
                     }
-                </div>
+                </section>
 
-                <div className="journal-list">
+                <section className="list-group">
                     <h3>Journaux archivés</h3>
                     {archivedJournals.length > 0 ?
                         archivedJournals.map(j => <JournalCard key={j.id} journal={j} type="archived" />)
-                        : <p>Aucun journal archivé.</p>
+                        : <p className="empty-msg">Aucun journal archivé.</p>
                     }
-                </div>
+                </section>
             </div>
 
-            {/* Modal de création identique */}
             {isModalOpen && (
                 <div className="modal-overlay">
-                    <div className="modal">
+                    <div className="modal-card">
                         <div className="modal-header">
-                            <h3>Créer un nouveau journal</h3>
-                            <button className="modal-close" onClick={() => setIsModalOpen(false)}>✕</button>
+                            <h3>Nouveau journal</h3>
+                            <button className="close-x" onClick={() => setIsModalOpen(false)}>✕</button>
                         </div>
-                        <form onSubmit={handleSubmit} className="class-form">
+                        <form onSubmit={handleSubmit} className="journal-form">
                             <div className="form-group">
-                                <label htmlFor="journalName">Nom du journal</label>
+                                <label>Nom du journal</label>
                                 <input
-                                    id="journalName"
                                     name="name"
                                     value={formData.name}
                                     onChange={handleFormChange}
                                     type="text"
                                     required
-                                    placeholder="Ex: Journal 2024-2025"
+                                    placeholder="Ex: Année 2024"
                                 />
                             </div>
                             <div className="form-group">
-                                <label htmlFor="schoolYear">Année scolaire</label>
+                                <label>Année scolaire</label>
                                 <select
-                                    id="schoolYear"
                                     name="school_year_id"
                                     value={formData.school_year_id}
                                     onChange={handleFormChange}
                                     required
                                 >
-                                    <option value="">-- Sélectionnez une année --</option>
+                                    <option value="">-- Sélectionner --</option>
                                     {schoolYears.map(sy => (
                                         <option key={sy.id} value={sy.id}>
                                             {sy.label || `${sy.start_date} - ${sy.end_date}`}
@@ -270,8 +271,8 @@ const JournalManager = () => {
                                 </select>
                             </div>
                             <div className="form-actions">
-                                <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)}>Annuler</button>
-                                <button type="submit" className="btn-primary" disabled={!formData.name || !formData.school_year_id}>Créer</button>
+                                <button type="button" className="btn-cancel" onClick={() => setIsModalOpen(false)}>Annuler</button>
+                                <button type="submit" className="btn-submit" disabled={!formData.name || !formData.school_year_id}>Créer</button>
                             </div>
                         </form>
                     </div>
@@ -286,9 +287,9 @@ const JournalManager = () => {
                 onConfirm={async () => {
                     try {
                         await confirmModal.onConfirm();
-                        success(confirmModal.successMessage || 'Action effectuée avec succès.');
+                        success(confirmModal.successMessage || 'Succès');
                     } catch (err) {
-                        showError(err.message || 'Une erreur est survenue.');
+                        showError(err.message || 'Erreur');
                     } finally {
                         closeConfirmModal();
                     }

@@ -86,6 +86,23 @@ const NotesSection = () => {
             </div>
 
             <div className="notes-widget">
+                <div className="notes-list-container">
+                    {loading ? (
+                        <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Chargement...</p>
+                    ) : notes.length === 0 ? (
+                        <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Aucune note pour ce journal.</p>
+                    ) : (
+                        notes.map(note => (
+                            <Note
+                                key={note.id}
+                                note={note}
+                                stateLabel={STATE_LABELS[note.state] || note.state || 'Autre'}
+                                onDelete={fetchNotes}
+                                onUpdate={fetchNotes}
+                            />
+                        ))
+                    )}
+                </div>
                 <form onSubmit={handleAddNote} className="note-input-area">
                     <textarea
                         value={newNoteText}
@@ -129,23 +146,6 @@ const NotesSection = () => {
                     </div>
                 </form>
 
-                <div className="notes-list-container">
-                    {loading ? (
-                        <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Chargement...</p>
-                    ) : notes.length === 0 ? (
-                        <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Aucune note pour ce journal.</p>
-                    ) : (
-                        notes.map(note => (
-                            <Note
-                                key={note.id}
-                                note={note}
-                                stateLabel={STATE_LABELS[note.state] || note.state || 'Autre'}
-                                onDelete={fetchNotes}
-                                onUpdate={fetchNotes}
-                            />
-                        ))
-                    )}
-                </div>
             </div>
         </div>
     );

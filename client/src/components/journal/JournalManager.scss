@@ -1,256 +1,278 @@
-// client/src/components/settings/Journal/JournalManager.scss
 @import '../../App.scss';
 
 .journal-manager {
   padding: 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
 
-  // --- HEADER SECTION ---
+  // --- HEADER ---
   .section-header {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    gap: 1.5rem;
     margin-bottom: 2rem;
-    flex-wrap: wrap;
-    gap: 1rem;
 
     h2 {
-      color: var(--text-light);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
       margin: 0;
-    }
-  }
-
-  // --- FILE & IMPORT CONTROLS ---
-  .file-container {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 1.5rem;
-  }
-
-  .import-section {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-
-    .btn-select {
-      background: var(--bg-dark-secondary);
       color: var(--text-light);
-      border: 1px solid var(--border-color);
-      padding: 0.5rem;
-      border-radius: 6px;
+      font-size: 1.5rem;
+    }
+
+    @media (min-width: 768px) {
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
     }
   }
 
-  .file-input-label {
-    display: inline-block;
-    padding: 0.6rem 1.2rem;
-    background-color: var(--accent-blue);
-    color: white;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    transition: all 0.2s ease;
+  .controls-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
 
-    &:hover {
-      background-color: darken(#007bff, 10%); // Teinte dynamique
+    @media (min-width: 600px) {
+      flex-direction: row;
+      width: auto;
     }
+  }
+
+  // --- IMPORT BOX ---
+  .import-box {
+    display: flex;
+    align-items: center;
+    background: var(--bg-dark-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.25rem;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+
+    .select-target {
+      background: transparent;
+      color: var(--text-light);
+      border: none;
+      padding: 0.5rem;
+      font-size: 0.85rem;
+      min-width: 140px;
+      outline: none;
+    }
+
+    .file-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.8rem;
+      background: var(--accent-blue);
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      max-width: 150px;
+      span {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
+
+    .btn-run-import {
+      background: var(--accent-green);
+      color: white;
+      border: none;
+      padding: 0.5rem 0.8rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+  }
+
+  .btn-add-journal {
+    @include btn-primary-base; // Ou votre mixin de bouton principal
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 42px;
+    padding: 0 1.2rem;
   }
 
   // --- LISTS & CARDS ---
   .journal-lists {
     display: grid;
-    gap: 2rem;
+    gap: 2.5rem;
   }
 
-  .journal-list {
+  .list-group {
     h3 {
       color: var(--text-muted);
-      font-size: 0.95rem;
-      margin-bottom: 1rem;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
       border-bottom: 1px solid var(--border-color);
       padding-bottom: 0.5rem;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+      margin-bottom: 1rem;
+    }
+    .empty-msg {
+      color: var(--text-muted);
+      font-style: italic;
+      font-size: 0.9rem;
     }
   }
 
   .journal-card {
     background: var(--bg-dark-secondary);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 1rem 1.5rem;
+    border-radius: 10px;
+    padding: 1.2rem;
+    margin-bottom: 1rem;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: transform 0.2s ease, background 0.2s ease;
+    flex-direction: column;
+    gap: 1.5rem;
+    transition: all 0.2s ease;
 
-    &:not(:last-child) {
-      margin-bottom: 1rem;
-    }
+    &:hover { border-color: var(--accent-blue); }
 
-    &.current {
-      border-left: 4px solid var(--accent-green);
-      background: rgba(var(--accent-green-rgb), 0.02);
-    }
+    &.current { border-left: 5px solid var(--accent-green); }
+    &.archived { opacity: 0.75; border-left: 5px solid var(--text-muted); }
 
-    &.archived {
-      opacity: 0.7;
-      border-left: 4px solid var(--text-muted);
+    @media (min-width: 850px) {
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
     }
   }
 
   .journal-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-
-    strong {
-      color: var(--text-light);
-      font-weight: 600;
-      font-size: 1.05rem;
+    .title-row {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      margin-bottom: 0.4rem;
+      strong { font-size: 1.1rem; color: var(--text-light); }
     }
-
-    span {
-      color: var(--text-muted);
-      font-size: 0.85rem;
-    }
-
-    small {
-      color: var(--accent-blue);
-      font-size: 0.75rem;
-      opacity: 0.8;
+    .meta-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      span { color: var(--text-muted); font-size: 0.9rem; }
+      small { color: var(--accent-blue); font-size: 0.8rem; font-weight: 500; }
     }
   }
 
-  // --- ACTIONS & BUTTONS ---
+  // --- ACTIONS ---
   .journal-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); // 2 boutons par ligne en mobile
+    gap: 0.5rem;
 
-    // Gestion Globale des Boutons Désactivés
-    button:disabled {
-      opacity: 0.4 !important;
-      cursor: not-allowed !important;
-      filter: grayscale(1);
-      border-color: var(--border-color) !important;
-      color: var(--text-muted) !important;
-      background: transparent !important;
-
-      &:hover {
-        background: transparent !important;
-      }
-    }
-  }
-
-  .status-badge {
-    font-size: 0.75rem;
-    font-weight: 700;
-    padding: 0.2rem 0.6rem;
-    border-radius: 6px;
-    text-transform: uppercase;
-
-    &.current {
-      background-color: rgba(var(--accent-green-rgb), 0.15);
-      color: var(--accent-green);
+    @media (min-width: 500px) {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-start;
     }
 
-    &.selected {
-      background-color: rgba(var(--accent-blue-rgb), 0.15);
-      color: var(--accent-blue);
+    @media (min-width: 850px) {
+      justify-content: flex-end;
     }
-  }
 
-  // Boutons Spécifiques
-  .btn-select {
-    @include btn-secondary-base;
-    padding: 0.5rem 1rem;
-    font-size: 0.8rem;
-  }
-
-  .btn-clear {
-    padding: 0.5rem 1rem;
-    font-size: 0.8rem;
-    background: transparent;
-    color: var(--accent-orange);
-    border: 1px solid rgba(var(--accent-orange-rgb), 0.4);
-    border-radius: 6px;
-    transition: all 0.2s ease;
-
-    &:hover:not(:disabled) {
-      background: rgba(var(--accent-orange-rgb), 0.1);
-      border-color: var(--accent-orange);
-    }
-  }
-
-  .btn-archive {
-    padding: 0.5rem 1rem;
-    font-size: 0.8rem;
-    background: transparent;
-    color: var(--text-muted);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-
-    &:hover:not(:disabled) {
-      background: rgba(var(--text-light-rgb), 0.05);
+    button {
+      padding: 0.6rem 0.8rem;
+      font-size: 0.85rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid var(--border-color);
       color: var(--text-light);
-      border-color: var(--text-light);
-      cursor: pointer;
+
+      &:disabled { opacity: 0.3; cursor: not-allowed; }
+      &:hover:not(:disabled) { background: rgba(255,255,255,0.05); }
     }
-  }
 
-  .btn-delete {
-    padding: 0.5rem 1rem;
-    font-size: 0.8rem;
-    background: transparent;
-    color: var(--red-danger);
-    border: 1px solid rgba(var(--red-danger-rgb), 0.5);
-    border-radius: 6px;
+    .btn-export-icon { color: var(--accent-blue); border-color: var(--accent-blue); }
+    .btn-select { background: var(--accent-blue); color: white; border: none; }
+    .btn-clear { color: var(--accent-orange); border-color: var(--accent-orange); }
+    .btn-delete { color: var(--red-danger); border-color: var(--red-danger); }
 
-    &:hover:not(:disabled) {
-      background: var(--red-danger);
-      color: white;
-      border-color: var(--red-danger);
-      cursor: pointer;
+    .status-badge {
+      grid-column: span 2; // Badge prend toute la largeur en mobile si besoin
+      text-align: center;
+      font-size: 0.7rem;
+      font-weight: bold;
+      padding: 0.3rem;
+      border-radius: 4px;
+      &.current { background: rgba(var(--accent-green-rgb), 0.1); color: var(--accent-green); }
+      &.selected { background: rgba(var(--accent-blue-rgb), 0.1); color: var(--accent-blue); }
     }
   }
 }
 
-// --- MODAL STYLES (Simple override) ---
+// --- MODAL ---
 .modal-overlay {
-  .modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 2000;
+
+  .modal-card {
     background: var(--bg-dark-secondary);
     border: 1px solid var(--border-color);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 450px;
+    padding: 1.5rem;
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+      h3 { margin: 0; color: var(--text-light); }
+      .close-x { background: none; border: none; color: var(--text-muted); cursor: pointer; }
+    }
 
     .form-group {
       margin-bottom: 1.2rem;
-
-      label {
-        display: block;
-        margin-bottom: 0.5rem;
-        color: var(--text-muted);
-      }
-
+      label { display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.9rem; }
       input, select {
         width: 100%;
-        padding: 0.7rem;
+        padding: 0.8rem;
+        background: var(--bg-dark);
         border: 1px solid var(--border-color);
-        color: var(--text-light);
         border-radius: 6px;
+        color: var(--text-light);
       }
     }
-  }
-}
 
-.btn-export {
-  background: #f0f0f0;
-  border: 1px solid #ccc;
-  padding: 5px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.2s;
+    .form-actions {
+      display: flex;
+      flex-direction: column; // Pile verticale en mobile
+      gap: 0.75rem;
+      margin-top: 1.5rem;
 
-  &:hover {
-    background: #e0e0e0;
+      @media (min-width: 400px) {
+        flex-direction: row;
+        justify-content: flex-end;
+      }
+
+      button {
+        padding: 0.8rem 1.5rem;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+      }
+      .btn-cancel { background: transparent; border: 1px solid var(--border-color); color: var(--text-muted); }
+      .btn-submit { background: var(--accent-blue); color: white; border: none; }
+    }
   }
 }
