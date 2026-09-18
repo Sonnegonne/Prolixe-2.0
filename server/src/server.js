@@ -54,6 +54,12 @@ async function initDatabase() {
                 name VARCHAR(255)
             )
         `);
+
+        // Journal de classe -> actualites Smartschool : table de liaison et
+        // colonnes d'exclusion. Meme esprit que ci-dessus, le projet n'ayant
+        // pas d'outil de migration.
+        await require('./controllers/SmartschoolController').migrate(connection);
+
         connection.release();
     } catch (error) {
         console.error('❌ Erreur Critique DB:', error);
@@ -97,6 +103,7 @@ apiRouter.use('/notes', require('./routes/NoteRoute'));
 apiRouter.use('/school-years', require('./routes/SchoolYearRoute'));
 apiRouter.use('/holidays', require('./routes/HolidayRoute'));
 apiRouter.use('/subjects', require('./routes/SubjectsRoute'));
+apiRouter.use('/smartschool', require('./routes/SmartschoolRoute'));
 
 // Attachement du routeur centralisé
 app.use('/api', apiRouter);
