@@ -55,6 +55,11 @@ async function initDatabase() {
             )
         `);
 
+        // Etablissements : une enseignante peut en avoir plusieurs, chacun
+        // avec son journal, ses classes et sa grille horaire. La migration
+        // cree la table, les colonnes school_id et rattache l'existant.
+        await require('./controllers/SchoolController').migrate(connection);
+
         // Journal de classe -> actualites Smartschool : table de liaison et
         // colonnes d'exclusion. Meme esprit que ci-dessus, le projet n'ayant
         // pas d'outil de migration.
@@ -91,6 +96,7 @@ apiRouter.use(verifyToken);
 
 // Enregistrement des ressources protégées
 apiRouter.use('/users', require('./routes/UserRoute'));
+apiRouter.use('/schools', require('./routes/SchoolRoute'));
 apiRouter.use('/classes', require('./routes/ClassRoutes'));
 apiRouter.use('/hours', require('./routes/ScheduleHours'));
 apiRouter.use('/schedule', require('./routes/ScheduleRoute'));

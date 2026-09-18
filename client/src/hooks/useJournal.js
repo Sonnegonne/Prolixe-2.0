@@ -2,11 +2,19 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import JournalService from '../services/JournalService';
 import { useAuth } from './useAuth';
+import { useSchools } from './useSchools';
 
 const JournalContext = createContext(null);
 
+// Le dernier journal consulte est retenu **par ecole** : revenir dans un
+// etablissement doit rouvrir le journal qu'on y avait laisse, pas celui de
+// l'autre. L'ancienne cle unique sert encore de repli le temps d'une session.
+const LEGACY_JOURNAL_KEY = 'prolixe_currentJournalId';
+const journalKeyFor = (schoolId) => `prolixe_currentJournalId_${schoolId || 'none'}`;
+
 export const JournalProvider = ({ children }) => {
     const { isAuthenticated } = useAuth();
+    const { currentSchoolId, loading: loadingSchools } = useSchools();
     const [journals, setJournals] = useState([]);
     const [currentJournal, setCurrentJournal] = useState(null);
     const [archivedJournals, setArchivedJournals] = useState([]);
@@ -15,6 +23,26 @@ export const JournalProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    // Choisit le journal a ouvrir dans une ecole donnee. Un journal sans ecole
+    // (base pas encore migree, ou aucune ecole enregistree) reste eligible :
+    // mieux vaut un journal que rien du tout.
+    const pickJournalForSchool = useCallback((all, schoolId) => {
+        const inSchool = j => !schoolId || j.school_id === schoolId || j.school_id == null;
+        const candidates = all.filter(j => !j.is_archived && inSchool(j));
+        if (candidates.length === 0) return null;
+
+        const storedId = parseInt(
+            localStorage.getItem(journalKeyFor(schoolId)) || localStorage.getItem(LEGACY_JOURNAL_KEY),
+            10
+        );
+        return candidates.find(j => j.id === storedId)
+            || candidates.find(j => j.is_current)
+            || candidates[0];
+    }, []);
+
+    // Le chargement ne choisit plus le journal : c'est l'effet ci-dessous qui
+    // s'en charge, pour que changer d'ecole rebascule le journal sans refaire
+    // un aller-retour reseau.
     const loadAllJournals = useCallback(async () => {
         setLoading(true);
         try {
@@ -22,14 +50,7 @@ export const JournalProvider = ({ children }) => {
             response = response.data;
             const all = response.data || [];
             setJournals(all);
-            const current = all.find(j => j.is_current && !j.is_archived);
-            const archived = all.filter(j => j.is_archived);
-            const lastSelectedId = localStorage.getItem('prolixe_currentJournalId');
-            const lastSelected = all.find(j => j.id === parseInt(lastSelectedId));
-
-            const journalToSet = lastSelected || current || all.find(j => !j.is_archived);
-            setCurrentJournal(journalToSet);
-            setArchivedJournals(archived);
+            setArchivedJournals(all.filter(j => j.is_archived));
         } catch (err) {
             setError(err.message || "Erreur lors du chargement des journaux.");
         } finally {
@@ -53,10 +74,25 @@ export const JournalProvider = ({ children }) => {
         }
     }, [isAuthenticated, loadAllJournals]);
 
+    // Le journal courant suit l'ecole choisie. On ne touche a rien tant que le
+    // journal en place appartient deja a cette ecole : sans ce garde-fou, la
+    // selection manuelle de l'utilisatrice serait ecrasee a chaque rendu.
+    useEffect(() => {
+        if (!isAuthenticated || loadingSchools || journals.length === 0) return;
+        // Un journal archive volontairement ouvert (consultation) reste en
+        // place tant qu'il releve de l'ecole affichee.
+        if (currentJournal
+            && (!currentSchoolId || currentJournal.school_id === currentSchoolId || currentJournal.school_id == null)) {
+            return;
+        }
+        setCurrentJournal(pickJournalForSchool(journals, currentSchoolId));
+    }, [isAuthenticated, loadingSchools, journals, currentSchoolId, currentJournal, pickJournalForSchool]);
+
     const selectJournal = (journal) => {
         if (journal && journal.id) {
             setCurrentJournal(journal);
-            localStorage.setItem('prolixe_currentJournalId', journal.id);
+            localStorage.setItem(journalKeyFor(journal.school_id), journal.id);
+            localStorage.setItem(LEGACY_JOURNAL_KEY, journal.id);
         }
     };
 

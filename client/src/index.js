@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './hooks/useAuth';
 import { ToastProvider } from './hooks/useToast';
+import { SchoolProvider } from './hooks/useSchools';
 import { JournalProvider } from './hooks/useJournal';
 import './index.css';
 import App from './App';
@@ -15,9 +16,13 @@ root.render(
         <BrowserRouter basename="/GPT">
             <AuthProvider>
                 <ToastProvider>
-                    <JournalProvider>
-                        <App />
-                    </JournalProvider>
+                    {/* SchoolProvider au-dessus de JournalProvider : le journal
+                        courant se deduit de l'ecole affichee. */}
+                    <SchoolProvider>
+                        <JournalProvider>
+                            <App />
+                        </JournalProvider>
+                    </SchoolProvider>
                 </ToastProvider>
             </AuthProvider>
         </BrowserRouter>

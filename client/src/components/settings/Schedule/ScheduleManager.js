@@ -1,11 +1,20 @@
 // frontend/src/components/ScheduleManager.js
+//
+// Grille horaire de l'établissement affiché. Deux écoles peuvent découper la
+// journée différemment ; tant qu'une école n'a pas sa propre grille, elle lit
+// la grille commune — que l'on peut alors détacher en un clic.
 import React, { useState } from 'react';
 import { useScheduleHours } from '../../../hooks/useScheduleHours';
+import { useSchools } from '../../../hooks/useSchools';
+import { useToast } from '../../../hooks/useToast';
 import './ScheduleManager.scss';
-import {Clock} from "lucide-react";
+import { Clock } from "lucide-react";
 
 const ScheduleManager = () => {
-    const { hours, loading, error, addHour, updateHour, removeHour } = useScheduleHours();
+    const { currentSchool, hasMultipleSchools } = useSchools();
+    const { hours, isOwn, loading, error, addHour, updateHour, removeHour, detachHours } = useScheduleHours();
+    const { success, error: showError } = useToast();
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalData, setModalData] = useState({ id: null, libelle: '', isEdit: false });
     const [validationError, setValidationError] = useState('');
@@ -38,7 +47,27 @@ const ScheduleManager = () => {
             if (modalData.isEdit) await updateHour(modalData.id, { libelle: modalData.libelle });
             else await addHour({ libelle: modalData.libelle });
             setIsModalOpen(false);
-        } catch (err) { setValidationError(err.message); }
+        } catch (err) {
+            setValidationError(err.response?.data?.message || err.message);
+        }
+    };
+
+    const handleRemove = async (hour) => {
+        try {
+            await removeHour(hour.id);
+            success('Créneau supprimé.');
+        } catch (err) {
+            showError(err.response?.data?.message || 'Suppression impossible.');
+        }
+    };
+
+    const handleDetach = async () => {
+        try {
+            await detachHours();
+            success(`${currentSchool.name} a maintenant sa propre grille horaire.`);
+        } catch (err) {
+            showError(err.response?.data?.message || 'Échec du détachement.');
+        }
     };
 
     const getSlotDuration = (libelle) => {
@@ -49,7 +78,12 @@ const ScheduleManager = () => {
 
     if (loading) return <div className="schedule-manager-container loading"><span>⏳ Chargement...</span></div>;
 
-    const sortedHours = [...hours].sort((a, b) => a.libelle.localeCompare(b.libelle));
+    // « 8:30 » comme « 08:30 » : on trie sur les minutes, pas sur le texte.
+    const startMinutes = (libelle) => {
+        const [h, m] = String(libelle || '').split('-')[0].split(':');
+        return Number(h) * 60 + Number(m);
+    };
+    const sortedHours = [...hours].sort((a, b) => startMinutes(a.libelle) - startMinutes(b.libelle));
 
     return (
         <div className="schedule-manager-container">
@@ -58,15 +92,36 @@ const ScheduleManager = () => {
                     <div>
                         <h2>
                             <Clock className="icon-lucid"/>
-                            Gestion de l'Horaire
+                            Heures de cours
                         </h2>
-                        <p>Configurez les créneaux de l'établissement</p>
+                        <p>
+                            {currentSchool
+                                ? <>Créneaux de <strong>{currentSchool.name}</strong></>
+                                : "Créneaux de l'établissement"}
+                        </p>
                     </div>
                 </div>
                 <button className="add-glass-btn" onClick={() => handleOpenModal()}>
                     <span>+</span> Nouveau Créneau
                 </button>
             </header>
+
+            {/* Tant que l'école lit la grille commune, la modifier toucherait
+                tous les établissements : on propose d'abord de la détacher. */}
+            {!isOwn && currentSchool && (
+                <div className="shared-grid-notice">
+                    <p>
+                        {hasMultipleSchools
+                            ? <><strong>{currentSchool.name}</strong> utilise la grille horaire commune. Détachez-la pour lui donner ses propres créneaux sans toucher à l'autre école.</>
+                            : <><strong>{currentSchool.name}</strong> utilise la grille horaire commune.</>}
+                    </p>
+                    <button type="button" className="detach-btn" onClick={handleDetach}>
+                        Créer une grille propre
+                    </button>
+                </div>
+            )}
+
+            {error && <div className="error-text">{error}</div>}
 
             <div className="schedule-grid">
                 {sortedHours.length === 0 ? (
@@ -81,7 +136,7 @@ const ScheduleManager = () => {
                             </div>
                             <div className="card-actions">
                                 <button onClick={() => handleOpenModal(hour)} className="action-btn edit">✏️</button>
-                                <button onClick={() => removeHour(hour.id)} className="action-btn delete">🗑️</button>
+                                <button onClick={() => handleRemove(hour)} className="action-btn delete">🗑️</button>
                             </div>
                         </div>
                     ))

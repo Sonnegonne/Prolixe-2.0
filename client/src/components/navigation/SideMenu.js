@@ -4,6 +4,7 @@ import { NavLink } from 'react-router-dom';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import useOutsideClick from '../../hooks/useOutsideClick'; // Assurez-vous que le chemin est correct
+import SchoolSwitcher from '../schools/SchoolSwitcher';
 
 import './SideMenu.scss';
 
@@ -78,6 +79,9 @@ const SideMenu = ({ isMenuOpen, toggleMenu, isCollapsed = false, toggleCollapse,
             </div>
 
             <div className="sidemenu-content">
+                {/* Bascule d'etablissement : invisible tant qu'il n'y a qu'une ecole. */}
+                <SchoolSwitcher collapsed={isCollapsed} />
+
                 <nav className="sidemenu-nav">
                     <ul className="menu-list">
                         {menuItems.map(item => (

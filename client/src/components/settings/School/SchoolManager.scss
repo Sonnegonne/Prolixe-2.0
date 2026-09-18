@@ -1,0 +1,140 @@
+/* ==========================================================================
+   SchoolManager.scss — gestion des établissements
+   ========================================================================== */
+
+@import '../../../tokens';
+
+.school-manager {
+    color: var(--text-light);
+
+    &.loading { color: var(--text-muted); }
+
+    .manager-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 1.5rem;
+
+        h2 {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 0 0 0.25rem;
+            font-size: 1.35rem;
+        }
+
+        p {
+            margin: 0;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+    }
+
+    .add-glass-btn {
+        @include btn-primary-base;
+        gap: 0.4rem;
+    }
+}
+
+.school-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.school-card {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 0.9rem 1rem;
+    background: var(--bg-dark-secondary);
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--school-color, var(--accent-blue));
+    border-radius: 0.75rem;
+    flex-wrap: wrap;
+
+    &.current { background: var(--white-transparent-sm); }
+}
+
+.school-badge {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.6rem;
+    background: var(--school-color, var(--accent-blue));
+    color: #fff;
+    font-weight: 800;
+    font-size: 0.8rem;
+}
+
+.school-info {
+    flex: 1;
+    min-width: 140px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+
+    .school-meta {
+        color: var(--text-muted);
+        font-size: 0.82rem;
+
+        em { color: var(--accent-green); font-style: normal; }
+    }
+}
+
+.school-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+
+    .action-btn {
+        @include btn-action-base;
+        color: var(--text-secondary);
+
+        &:hover { background: var(--white-transparent-md); color: var(--text-light); }
+        &.danger:hover { background: var(--red-transparent-sm); color: var(--red-danger); border-color: var(--red-danger); }
+    }
+}
+
+/* Modale — mêmes codes que les autres écrans de réglages. */
+.school-manager {
+    .glass-modal-overlay { @include modal-overlay-base; }
+
+    .glass-modal {
+        @include modal-base;
+
+        h3 { margin: 0 0 1.25rem; font-size: 1.2rem; }
+    }
+
+    .input-group { @include modal-form-group-base; }
+
+    .modal-footer {
+        @include modal-form-actions-base;
+
+        button { @include btn-secondary-base; }
+        .confirm-btn { @include btn-primary-base; }
+    }
+
+    .color-row {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .color-dot {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 2px solid transparent;
+        cursor: pointer;
+        transition: transform 0.15s ease, border-color 0.15s ease;
+
+        &:hover { transform: scale(1.1); }
+        &.selected { border-color: var(--text-light); transform: scale(1.1); }
+    }
+}

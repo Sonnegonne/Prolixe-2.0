@@ -10,6 +10,7 @@
 //                                    dans une transaction.
 
 const pool = require('../../config/database');
+const ScheduleHoursController = require('./ScheduleHoursController');
 const { parseSchedulePdf } = require('../utils/schedulePdfParser');
 
 const HOUR_RE = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]-([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
@@ -81,7 +82,7 @@ function suggestPeriod(generatedAt) {
 
 async function assertJournalOwned(conn, journalId, userId) {
     const [rows] = await conn.execute(
-        'SELECT id FROM JOURNALS WHERE id = ? AND user_id = ?',
+        'SELECT id, school_id FROM JOURNALS WHERE id = ? AND user_id = ?',
         [journalId, userId]
     );
     if (!rows.length) {
@@ -89,6 +90,9 @@ async function assertJournalOwned(conn, journalId, userId) {
         err.status = 404;
         throw err;
     }
+    // L'ecole du journal commande la grille horaire a utiliser : deux
+    // etablissements peuvent decouper la journee differemment.
+    return rows[0];
 }
 
 class ScheduleImportController {
@@ -116,9 +120,9 @@ class ScheduleImportController {
         }
 
         try {
-            await assertJournalOwned(pool, journalId, userId);
+            const journal = await assertJournalOwned(pool, journalId, userId);
 
-            const [hours] = await pool.execute('SELECT id, libelle FROM SCH_HOURS');
+            const { hours } = await ScheduleHoursController.resolveForSchool(pool, journal.school_id);
             const [subjects] = await pool.execute(
                 'SELECT id, name, color_code FROM SUBJECTS WHERE user_id = ?', [userId]
             );
@@ -216,16 +220,20 @@ class ScheduleImportController {
         try {
             connection = await pool.getConnection();
             await connection.beginTransaction();
-            await assertJournalOwned(connection, journalId, userId);
+            const journal = await assertJournalOwned(connection, journalId, userId);
 
             const created = { hours: [], subjects: [], classes: [] };
 
-            // 1. Creneaux horaires (table partagee : on ne cree que ce qui manque).
-            const [hours] = await connection.execute('SELECT id, libelle FROM SCH_HOURS');
+            // 1. Creneaux horaires : ceux de l'ecole du journal (sa grille
+            // propre, ou la grille commune si elle n'en a pas). Un creneau
+            // manquant est cree la ou l'ecole lit, pour que l'import n'aille
+            // pas nourrir la grille d'un autre etablissement.
+            const { hours, isOwn } = await ScheduleHoursController.resolveForSchool(connection, journal.school_id);
+            const hoursOwner = isOwn ? journal.school_id : null;
             const hourByLibelle = new Map(hours.map(h => [h.libelle, h.id]));
             for (const libelle of new Set(slots.map(s => s.libelle))) {
                 if (hourByLibelle.has(libelle)) continue;
-                const [r] = await connection.execute('INSERT INTO SCH_HOURS (libelle) VALUES (?)', [libelle]);
+                const [r] = await connection.execute('INSERT INTO SCH_HOURS (libelle, school_id) VALUES (?, ?)', [libelle, hoursOwner]);
                 hourByLibelle.set(libelle, r.insertId);
                 created.hours.push(libelle);
             }

@@ -1,7 +1,95 @@
 // backend/controllers/ScheduleController.js
 const pool = require('../../config/database');
+const SchoolController = require('./SchoolController');
+const ScheduleHoursController = require('./ScheduleHoursController');
 
 class ScheduleController {
+
+    // Vue « toutes ecoles » d'une date donnee.
+    //
+    // L'enseignante n'a qu'une semaine, meme si elle a deux etablissements :
+    // le tableau de bord et l'emploi du temps doivent pouvoir montrer les deux
+    // d'un coup. Le reste de l'application (journal, classes, evaluations)
+    // continue de travailler ecole par ecole via le journal courant.
+    //
+    // Chaque ecole apporte son propre horaire actif a cette date ET sa propre
+    // grille horaire : c'est le client qui fusionne les lignes par libelle,
+    // parce que lui seul sait s'il affiche une grille ou une liste.
+    static async getOverview(req, res) {
+        const { date } = req.query;
+        const userId = req.user.id;
+
+        if (!date) {
+            return res.status(400).json({ success: false, message: 'La date est requise.' });
+        }
+
+        try {
+            const schools = await SchoolController.listForUser(pool, userId);
+            const payload = [];
+
+            for (const school of schools) {
+                // Meme regle de depart que getScheduleByDate : parmi les
+                // horaires valides ce jour-la, le dernier entre en vigueur
+                // l'emporte. On ignore les journaux archives, dont l'horaire
+                // ferait double emploi avec celui de l'annee en cours.
+                const [sets] = await pool.execute(`
+                    SELECT s.id, s.name, s.journal_id, j.name AS journal_name
+                    FROM SCHEDULE_SETS s
+                    JOIN JOURNALS j ON j.id = s.journal_id
+                    WHERE s.user_id = ?
+                      AND j.school_id = ?
+                      AND j.is_archived = 0
+                      AND ? BETWEEN DATE(s.start_time) AND DATE(s.end_time)
+                    ORDER BY s.start_time DESC, s.id DESC
+                    LIMIT 1
+                `, [userId, school.id, date]);
+
+                const { hours } = await ScheduleHoursController.resolveForSchool(pool, school.id);
+                let slots = [];
+
+                if (sets.length > 0) {
+                    const [rows] = await pool.execute(`
+                        SELECT
+                            ss.id AS slot_id,
+                            ss.day_of_week,
+                            ss.time_slot_id,
+                            ss.room,
+                            ss.class_id,
+                            ss.subject_id,
+                            sh.libelle AS time_label,
+                            c.name AS class_name,
+                            c.level AS class_level,
+                            sbj.name AS subject_name,
+                            sbj.color_code AS subject_color
+                        FROM SCHEDULE_SLOTS ss
+                            LEFT JOIN SCH_HOURS sh ON ss.time_slot_id = sh.id
+                            LEFT JOIN CLASSES c ON ss.class_id = c.id
+                            LEFT JOIN SUBJECTS sbj ON ss.subject_id = sbj.id
+                        WHERE ss.schedule_set_id = ?
+                        ORDER BY ss.day_of_week ASC
+                    `, [sets[0].id]);
+                    slots = rows;
+                }
+
+                payload.push({
+                    school: {
+                        id: school.id,
+                        name: school.name,
+                        short_name: school.short_name,
+                        color: school.color
+                    },
+                    set: sets[0] || null,
+                    hours,
+                    slots
+                });
+            }
+
+            res.json({ success: true, data: payload });
+        } catch (error) {
+            console.error('Erreur getOverview:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
 
     static async createScheduleSet(req, res) {
         const { name, journal_id, start_date, end_date } = req.body;

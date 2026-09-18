@@ -1,6 +1,6 @@
 import React from 'react';
 
-const TodayScheduleSection = ({ todaySchedule, holidayInfo, getClassColor, classes, loading, onSlotClick }) => {
+const TodayScheduleSection = ({ todaySchedule, holidayInfo, classes, loading, onSlotClick, showSchools = false }) => {
 
     if (loading) return <div className="loading-message">Chargement de l'emploi du temps...</div>;
 
@@ -26,9 +26,14 @@ const TodayScheduleSection = ({ todaySchedule, holidayInfo, getClassColor, class
         );
     }
 
-    const sortedSchedule = [...todaySchedule].sort((a, b) =>
-        parseInt(a.time_slot_id) - parseInt(b.time_slot_id)
-    );
+    // Les creneaux de deux ecoles ont des identifiants independants : c'est
+    // l'heure de debut, lue dans le libelle, qui ordonne la journee.
+    const startMinutes = (course) => {
+        const [h, m] = String(course.time_label || '').split('-')[0].split(':');
+        const minutes = Number(h) * 60 + Number(m);
+        return Number.isFinite(minutes) ? minutes : Number.MAX_SAFE_INTEGER;
+    };
+    const sortedSchedule = [...todaySchedule].sort((a, b) => startMinutes(a) - startMinutes(b));
 
     return (
         <div className="daily-schedule-section">
@@ -60,6 +65,11 @@ const TodayScheduleSection = ({ todaySchedule, holidayInfo, getClassColor, class
                                 <div className="course-summary">
                                     <div className="course-info-header">
                                         <span className="course-time-display">{course.time_label}</span>
+                                        {showSchools && course.school && (
+                                            <span className="course-school-badge" style={{ backgroundColor: course.school.color }}>
+                                                {course.school.short_name || course.school.name}
+                                            </span>
+                                        )}
                                         <span className="course-class-display">{course.class_name || classInfo?.name}</span>
                                     </div>
                                     <div className="course-details">

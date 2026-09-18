@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useJournal } from '../../hooks/useJournal';
 import { useSchoolYears } from '../../hooks/useSchoolYear';
+import { useSchools } from '../../hooks/useSchools';
 import { useToast } from '../../hooks/useToast';
 import ConfirmModal from '../ConfirmModal';
 import JournalService from '../../services/JournalService';
@@ -23,10 +24,12 @@ const JournalManager = () => {
     } = useJournal();
 
     const { schoolYears } = useSchoolYears();
+    const { schools, currentSchoolId, hasMultipleSchools, selectSchool } = useSchools();
     const { success, error: showError } = useToast();
 
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [formData, setFormData] = useState({ name: '', school_year_id: '' });
+    // Un journal naît dans une école : par défaut celle qu'on regarde.
+    const [formData, setFormData] = useState({ name: '', school_year_id: '', school_id: '' });
     const [confirmModal, setConfirmModal] = useState({
         isOpen: false,
         title: '',
@@ -96,10 +99,14 @@ const JournalManager = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            await createJournal(formData);
+            const schoolId = formData.school_id || currentSchoolId || '';
+            await createJournal({ ...formData, school_id: schoolId });
             success('Nouveau journal créé avec succès !');
             setIsModalOpen(false);
-            setFormData({ name: '', school_year_id: '' });
+            setFormData({ name: '', school_year_id: '', school_id: '' });
+            // Le nouveau journal appartient peut-être à l'autre école : on s'y
+            // place, sinon il resterait invisible après création.
+            if (schoolId && Number(schoolId) !== currentSchoolId) selectSchool(schoolId);
         } catch (err) {
             showError(err.response?.data?.message || "Erreur lors de la création.");
         }
@@ -119,6 +126,11 @@ const JournalManager = () => {
                         {isSelected && isArchived && <span className="status-badge selected">Visualisé</span>}
                     </div>
                     <div className="meta-row">
+                        {hasMultipleSchools && journal.school_name && (
+                            <span className="journal-school" style={{ backgroundColor: journal.school_color }}>
+                                {journal.school_short_name || journal.school_name}
+                            </span>
+                        )}
                         <span>{journal.year_label}</span>
                         {hasEntries && <small>{journal.entries_count} entrée(s)</small>}
                     </div>
@@ -287,6 +299,20 @@ const JournalManager = () => {
                                     ))}
                                 </select>
                             </div>
+                            {hasMultipleSchools && (
+                                <div className="form-group">
+                                    <label>École</label>
+                                    <select
+                                        name="school_id"
+                                        value={formData.school_id || currentSchoolId || ''}
+                                        onChange={handleFormChange}
+                                    >
+                                        {schools.map(school => (
+                                            <option key={school.id} value={school.id}>{school.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <div className="form-actions">
                                 <button type="button" className="btn-cancel" onClick={() => setIsModalOpen(false)}>Annuler</button>
                                 <button type="submit" className="btn-submit" disabled={!formData.name || !formData.school_year_id}>Créer</button>

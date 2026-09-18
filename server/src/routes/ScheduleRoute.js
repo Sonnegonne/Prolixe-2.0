@@ -41,6 +41,9 @@ router.delete('/sets/:setId/slots/:day/:hourId', ScheduleController.deleteSlot);
 
 router.get('/active-set', ScheduleController.getScheduleByDate);
 
+// Vue toutes ecoles d'une date. A declarer avant '/:id', qui avalerait le mot.
+router.get('/overview', ScheduleController.getOverview);
+
 router.get('/:id', (req, res, next) => {
     next();
 }, ScheduleController.getFullSchedule);

@@ -1,3 +1,4 @@
+import { useSchools } from '../../../hooks/useSchools';
 import React, { useState, useEffect } from 'react';
 import AttributionService from '../../../services/AttributionService';
 import { useSchoolYears } from "../../../hooks/useSchoolYear";
@@ -26,6 +27,7 @@ const FORM_TITLES = {
 
 const AttributionManager = () => {
     const { schoolYears, loading: schoolYearsLoading } = useSchoolYears();
+    const { schools, currentSchoolId } = useSchools();
     const [attributions, setAttributions] = useState([]);
     const [attributionsLoading, setAttributionsLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
@@ -35,6 +37,7 @@ const AttributionManager = () => {
 
     const [formData, setFormData] = useState({
         school_year_id: '',
+        school_id: '',
         school_name: '',
         start_date: '',
         end_date: '',
@@ -69,6 +72,7 @@ const AttributionManager = () => {
     // PUT (mise à jour) et POST (création).
     const formFieldsFrom = (attribution) => ({
         school_year_id: attribution.school_year_id,
+        school_id: attribution.school_id || '',
         school_name: attribution.school_name,
         start_date: toInputDate(attribution.start_date),
         end_date: toInputDate(attribution.end_date),
@@ -79,7 +83,7 @@ const AttributionManager = () => {
 
     const handleAddNew = () => {
         setFormMode('create');
-        setFormData({ school_year_id: '', school_name: '', start_date: '', end_date: '', esi_hours: 0, ess_hours: 0, className: '' });
+        setFormData({ school_year_id: '', school_id: currentSchoolId || '', school_name: '', start_date: '', end_date: '', esi_hours: 0, ess_hours: 0, className: '' });
         setShowForm(true);
     };
 
@@ -201,16 +205,22 @@ const AttributionManager = () => {
                             {/* Section École et Classe */}
                             <div className="grid-row">
                                 <div className="input-group flex-2">
-                                    <label htmlFor="school_name">École</label>
-                                    <input
-                                        id="school_name"
-                                        name="school_name"
-                                        type="text"
-                                        value={formData.school_name}
+                                    <label htmlFor="school_id">École</label>
+                                    {/* L'ecole vient desormais de la liste des
+                                        etablissements : le libelle est recopie
+                                        cote serveur, une seule source fait foi. */}
+                                    <select
+                                        id="school_id"
+                                        name="school_id"
+                                        value={formData.school_id || ''}
                                         onChange={handleFormChange}
-                                        placeholder="Ex: ISLW"
                                         required
-                                    />
+                                    >
+                                        <option value="">-- Sélectionner --</option>
+                                        {schools.map(school => (
+                                            <option key={school.id} value={school.id}>{school.name}</option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div className="input-group flex-1">
                                     <label htmlFor="className">Classe / Cours</label>

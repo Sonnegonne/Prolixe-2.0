@@ -4,6 +4,7 @@ import ClassesManager from "./Class/ClassManager";
 import ScheduleManager from "./Schedule/ScheduleManager";
 import HolidaysManager from "./holidays/HolidaysManager";
 import JournalManager from "../journal/JournalManager";
+import SchoolManager from "./School/SchoolManager";
 import AttributionManager from "./Attribution/AttributionManager";
 import StudentManager from "./Student/StudentManager";
 import ScheduleCreator from "./Schedule/ScheduleCreator";
@@ -54,7 +55,6 @@ const Settings = () => {
             id: 'admin',
             title: 'Administration',
             tabs: [
-                { id: 'schedule', label: 'Heures de cours', icon: '⏰' },
                 { id: 'holidays', label: 'Calendrier', icon: '📅' }
             ]
         });
@@ -64,7 +64,9 @@ const Settings = () => {
         id: 'user',
         title: 'Ma Classe',
         tabs: [
+            { id: 'schools', label: 'Écoles', icon: '🏛️' },
             { id: 'journals', label: 'Journaux', icon: '📚' },
+            { id: 'schedule', label: 'Heures de cours', icon: '⏰' },
             { id: 'subjects', label: 'Matières', icon: '📖' },
             { id: 'classes', label: 'Classes', icon: '🏫' },
             { id: 'horaire', label: 'Horaire', icon: '🗓️' },
@@ -75,6 +77,7 @@ const Settings = () => {
 
     const renderTabContent = () => {
         switch (activeTab) {
+            case 'schools': return <SchoolManager />;
             case 'journals': return <JournalManager />;
             case 'subjects': return <SubjectManager />;
             case 'classes': return <ClassesManager />;

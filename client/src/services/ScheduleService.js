@@ -27,6 +27,16 @@ const ScheduleService = {
         });
     },
 
+    /**
+     * Horaire de toutes les écoles à une date donnée : une entrée par école,
+     * avec son horaire actif, sa grille horaire et ses cours. Sert aux vues
+     * combinées (emploi du temps, journée du tableau de bord).
+     */
+    getOverview: async (date) => {
+        const response = await axios.get('/schedule/overview', { params: { date } });
+        return response.data;
+    },
+
     getScheduleIdByDate: async (date, journalId) => {
         const response = await axios.get('/schedule/active-set', {
             params: journalId ? { date, journalId } : { date }

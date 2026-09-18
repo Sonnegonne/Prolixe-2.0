@@ -198,3 +198,38 @@
 }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+// Bandeau « grille commune » : proposé tant que l'école n'a pas ses propres
+// créneaux, pour éviter qu'une modification ne se propage à l'autre école.
+.schedule-manager-container .shared-grid-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+
+  p {
+    margin: 0;
+    color: #fcd34d;
+    font-size: 0.88rem;
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .detach-btn {
+    padding: 0.5rem 0.9rem;
+    border: 1px solid rgba(245, 158, 11, 0.6);
+    border-radius: 0.5rem;
+    background: transparent;
+    color: #fcd34d;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover { background: rgba(245, 158, 11, 0.2); }
+  }
+}

@@ -1,20 +1,33 @@
 // frontend/src/hooks/useScheduleHours.js
-import {useState, useEffect, useCallback} from 'react';
+//
+// La grille horaire depend de l'etablissement : deux ecoles ne decoupent pas
+// forcement la journee de la meme facon. Sans argument, le hook suit l'ecole
+// affichee ; on peut lui en imposer une autre (ecran de reglages, import PDF).
+import { useState, useEffect, useCallback } from 'react';
 import ScheduleHoursService from '../services/ScheduleHoursService';
+import { useSchools } from './useSchools';
 
-export const useScheduleHours = () => {
+export const useScheduleHours = (schoolIdOverride) => {
+    const { currentSchoolId } = useSchools();
+    const schoolId = schoolIdOverride !== undefined ? schoolIdOverride : currentSchoolId;
+
     const [hours, setHours] = useState([]);
+    // `isOwn` dit si l'ecole possede sa propre grille ou si elle lit encore la
+    // grille commune : l'ecran de reglages en a besoin pour proposer le
+    // detachement plutot que de laisser modifier la grille de tout le monde.
+    const [isOwn, setIsOwn] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     // Charger les créneaux horaires
-    const loadHours = async () => {
+    const loadHours = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
 
-            const response = await ScheduleHoursService.getHours();
+            const response = await ScheduleHoursService.getHours(schoolId);
             setHours(response.data.data || []);
+            setIsOwn(Boolean(response.data.meta?.is_own));
 
         } catch (err) {
             setError(err.message);
@@ -22,13 +35,13 @@ export const useScheduleHours = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [schoolId]);
 
     // Ajouter un créneau horaire
     const addHour = async (hourData) => {
         try {
-            const response = await ScheduleHoursService.createHour(hourData);
-            setHours(prev => [...prev, response.data]);
+            const response = await ScheduleHoursService.createHour({ school_id: schoolId, ...hourData });
+            await loadHours();
             return response.data;
         } catch (err) {
             setError(err.message);
@@ -41,7 +54,7 @@ export const useScheduleHours = () => {
         try {
             const response = await ScheduleHoursService.updateHour(id, hourData);
             setHours(prev => prev.map(hour =>
-                hour.id === id ? response.data.data : hour
+                hour.id === id ? { ...hour, ...response.data.data } : hour
             ));
             return response.data;
         } catch (err) {
@@ -59,6 +72,14 @@ export const useScheduleHours = () => {
             setError(err.message);
             throw err;
         }
+    };
+
+    // Donne a l'ecole sa grille propre (copie de la grille commune) et
+    // rebranche les cours deja poses dessus, cote serveur.
+    const detachHours = async () => {
+        if (!schoolId) return;
+        await ScheduleHoursService.detachHours(schoolId);
+        await loadHours();
     };
 
     // FONCTIONS UTILITAIRES POUR L'HORAIRE
@@ -127,14 +148,16 @@ export const useScheduleHours = () => {
         return hour ? hour.id : null;
     }, [hours]);
 
-    // Charger les créneaux au montage du composant
+    // Rechargement a chaque changement d'ecole.
     useEffect(() => {
         loadHours().then();
-    }, []);
+    }, [loadHours]);
 
     return {
         // Données
         hours,
+        isOwn,
+        schoolId,
         loading,
         error,
 
@@ -143,6 +166,7 @@ export const useScheduleHours = () => {
         addHour,
         updateHour,
         removeHour,
+        detachHours,
 
         // Utilitaires
         parseTimeSlot,

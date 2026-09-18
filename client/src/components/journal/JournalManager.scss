@@ -277,3 +277,15 @@
     }
   }
 }
+// Étiquette d'école sur une carte de journal : n'apparaît qu'avec plusieurs
+// établissements, pour distinguer deux journaux de la même année scolaire.
+.journal-manager .meta-row .journal-school {
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}

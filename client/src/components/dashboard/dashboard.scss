@@ -437,3 +437,15 @@ $radius-xl: 1.25rem;
     p  { color: $text-muted; margin-bottom: 2rem; }
   }
 }
+// Pastille d'école sur un cours de la journée : n'apparaît que lorsque
+// l'utilisatrice enseigne dans plus d'un établissement (cf. showSchools).
+.daily-journal-slot .course-info-header .course-school-badge {
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}

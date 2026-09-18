@@ -1,9 +1,14 @@
 import ApiService from '../api/axiosConfig';
 
 class ScheduleHoursService {
-    // Récupérer tous les créneaux horaires
-    static async getHours() {
-        return ApiService.request('/hours');
+    // Récupérer les créneaux horaires — ceux de l'école si elle est précisée,
+    // sinon la grille commune.
+    static async getHours(schoolId) {
+        return ApiService.request({
+            url: '/hours',
+            method: 'GET',
+            params: schoolId ? { schoolId } : undefined,
+        });
     }
 
     // Récupérer un créneau horaire spécifique
@@ -22,7 +27,6 @@ class ScheduleHoursService {
 
     // Modifier un créneau horaire
     static async updateHour(id, hourData) {
-        console.log("Données envoyées à Axios :", hourData);
         return ApiService.request({
             url: `/hours/${id}`,
             method: 'PUT',
@@ -34,6 +38,15 @@ class ScheduleHoursService {
     static async deleteHour(id) {
         return ApiService.request(`/hours/${id}`, {
             method: 'DELETE',
+        });
+    }
+
+    // Donner à une école sa propre grille, copiée de la grille commune.
+    static async detachHours(schoolId) {
+        return ApiService.request({
+            url: '/hours/detach',
+            method: 'POST',
+            data: { school_id: schoolId },
         });
     }
 }

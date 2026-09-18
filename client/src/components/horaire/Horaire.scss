@@ -408,3 +408,83 @@ $radius-lg:     16px;
 }
 
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+// ==========================================================================
+// Vue multi-écoles
+// ==========================================================================
+
+// Sélecteur de portée : toutes les écoles, ou une seule en détail.
+.horaire-scope {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.scope-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid $border;
+  background: rgba($surface-2, 0.6);
+  color: $text-secondary;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover { color: $text-primary; border-color: var(--school-color, $teal); }
+
+  &.active {
+    color: $text-primary;
+    background: rgba($surface-3, 0.9);
+    border-color: var(--school-color, $teal);
+  }
+
+  .scope-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--school-color, $teal);
+  }
+}
+
+.horaire-notice {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: $radius-md;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fcd34d;
+  font-size: 0.85rem;
+}
+
+// Étiquette d'école posée sur un cours : c'est le seul repère qui distingue
+// deux établissements dans la grille combinée, la couleur restant celle de
+// la matière.
+.course-school {
+  align-self: flex-start;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--school-color, $teal);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+// Deux cours simultanés (une école chacun) partagent la case.
+.slot-cell {
+  flex-direction: column;
+  gap: 3px;
+}
+
+.day-row .day-row-body .day-row-course + .day-row-course {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid $border;
+}

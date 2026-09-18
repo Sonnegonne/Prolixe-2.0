@@ -1,5 +1,6 @@
 // backend/controllers/journalController.js
 const pool = require('../../config/database');
+const SchoolController = require('./SchoolController');
 
 /**
  * Transforme une date type "mardi 05 nov. 2024" en objet Date JS
@@ -66,13 +67,17 @@ class JournalController {
         try {
             const userId = req.user.id;
             const journals = await JournalController.withConnection(async (db) => {
+                // Les colonnes de SCHOOLS sont aliasees : `sc.name` ecraserait
+                // `j.name` dans l'objet renvoye par mysql2 (dernier gagnant).
                 const [rows] = await db.execute(`
                     SELECT j.*, sy.label AS year_label,
+                    sc.name AS school_name, sc.short_name AS school_short_name, sc.color AS school_color,
                     (SELECT COUNT(*) FROM JOURNAL_ENTRIES je WHERE je.journal_id = j.id) AS entries_count
                     FROM JOURNALS j
                     JOIN SCHOOL_YEARS sy ON j.school_year_id = sy.id
+                    LEFT JOIN SCHOOLS sc ON sc.id = j.school_id
                     WHERE j.user_id = ?
-                    ORDER BY sy.start_date DESC
+                    ORDER BY sc.display_order ASC, sy.start_date DESC
                 `, [userId]);
                 return rows;
             });
@@ -110,15 +115,29 @@ class JournalController {
             connection = await pool.getConnection();
             await connection.beginTransaction();
 
-            // Désactiver le journal courant de l'utilisateur
+            // Un journal appartient a une ecole. Faute d'indication, on prend
+            // la premiere de l'utilisateur : un client qui ignore les ecoles
+            // continue de fonctionner sans creer de journal orphelin.
+            let schoolId = parseInt(req.body.school_id, 10);
+            if (Number.isFinite(schoolId) && schoolId > 0) {
+                await SchoolController.assertOwned(connection, schoolId, userId);
+            } else {
+                const schools = await SchoolController.listForUser(connection, userId);
+                schoolId = schools.length > 0 ? schools[0].id : null;
+            }
+
+            // Le journal « courant » se compte par ecole : en basculer une ne
+            // doit pas deselectionner celui de l'autre.
             await connection.execute(
-                'UPDATE JOURNALS SET is_current = 0 WHERE user_id = ?',
-                [userId]
+                schoolId
+                    ? 'UPDATE JOURNALS SET is_current = 0 WHERE user_id = ? AND school_id = ?'
+                    : 'UPDATE JOURNALS SET is_current = 0 WHERE user_id = ?',
+                schoolId ? [userId, schoolId] : [userId]
             );
 
             const [result] = await connection.execute(
-                'INSERT INTO JOURNALS (name, school_year_id, user_id, is_current, is_archived, created_at) VALUES (?, ?, ?, 1, 0, NOW())',
-                [name, school_year_id, userId]
+                'INSERT INTO JOURNALS (name, school_year_id, user_id, school_id, is_current, is_archived, created_at) VALUES (?, ?, ?, ?, 1, 0, NOW())',
+                [name, school_year_id, userId, schoolId]
             );
 
             await connection.commit();
@@ -222,13 +241,15 @@ class JournalController {
                 [id]
             );
 
-            // Si c'était le journal courant, promouvoir le plus récent non archivé
+            // Si c'était le journal courant, promouvoir le plus récent non
+            // archivé *de la même école* : promouvoir celui d'un autre
+            // établissement ferait basculer l'utilisatrice sans le lui dire.
             if (journal.is_current) {
                 const [candidates] = await connection.execute(
-                    `SELECT id FROM JOURNALS 
-                     WHERE user_id = ? AND is_archived = 0 AND id != ?
+                    `SELECT id FROM JOURNALS
+                     WHERE user_id = ? AND is_archived = 0 AND id != ? AND school_id <=> ?
                      ORDER BY created_at DESC LIMIT 1`,
-                    [userId, id]
+                    [userId, id, journal.school_id]
                 );
                 if (candidates.length > 0) {
                     await connection.execute(
@@ -262,7 +283,7 @@ class JournalController {
 
             // Vérification d'ownership
             const [journals] = await connection.execute(
-                'SELECT id, is_current FROM JOURNALS WHERE id = ? AND user_id = ?',
+                'SELECT id, is_current, school_id FROM JOURNALS WHERE id = ? AND user_id = ?',
                 [id, userId]
             );
             if (journals.length === 0) {
@@ -275,13 +296,13 @@ class JournalController {
             await connection.execute('DELETE FROM ASSIGNMENTS WHERE journal_id = ?', [id]);
             await connection.execute('DELETE FROM JOURNALS WHERE id = ?', [id]);
 
-            // Si c'était le journal courant, promouvoir un autre
+            // Si c'était le journal courant, promouvoir un autre de la même école.
             if (journals[0].is_current) {
                 const [candidates] = await connection.execute(
-                    `SELECT id FROM JOURNALS 
-                     WHERE user_id = ? AND is_archived = 0
+                    `SELECT id FROM JOURNALS
+                     WHERE user_id = ? AND is_archived = 0 AND school_id <=> ?
                      ORDER BY created_at DESC LIMIT 1`,
-                    [userId]
+                    [userId, journals[0].school_id]
                 );
                 if (candidates.length > 0) {
                     await connection.execute(

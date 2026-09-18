@@ -1199,3 +1199,13 @@ select.status-select {
     .corrected-label    { border-left: none; padding-left: 0; }
   }
 }
+// Étiquette d'établissement à côté du titre du journal (multi-écoles).
+.journal-header .journal-title .journal-school-tag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}

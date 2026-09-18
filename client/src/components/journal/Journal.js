@@ -35,6 +35,7 @@ import {
 
 import { useSchedule } from '../../hooks/useSchedule';
 import { useJournal } from '../../hooks/useJournal';
+import { useSchools } from '../../hooks/useSchools';
 import { useClasses } from '../../hooks/useClasses';
 import { useHolidays } from '../../hooks/useHolidays';
 import { useToast } from '../../hooks/useToast';
@@ -51,6 +52,7 @@ import './Journal.scss';
 const Journal = () => {
     const navigate = useNavigate();
     const { journals, loading: loadingJournals, currentJournal } = useJournal();
+    const { hasMultipleSchools } = useSchools();
     const journalId = currentJournal?.id;
 
     useEffect(() => {
@@ -74,6 +76,13 @@ const Journal = () => {
                 <div className="journal-title">
                     <BookOpen size={24} />
                     <h1>{currentJournal ? currentJournal.name : 'Journal de classe'}</h1>
+                    {/* Deux ecoles peuvent avoir un journal de meme intitule :
+                        l'etiquette dit lequel est ouvert. */}
+                    {hasMultipleSchools && currentJournal?.school_name && (
+                        <span className="journal-school-tag" style={{ backgroundColor: currentJournal.school_color }}>
+                            {currentJournal.school_name}
+                        </span>
+                    )}
                 </div>
             </header>
 
