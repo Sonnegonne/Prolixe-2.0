@@ -80,6 +80,9 @@
     }
   }
 
+  // Date du plan : n'apparaît que sur la feuille imprimée.
+  .print-meta { display: none; }
+
   .plan-placeholder {
     color: var(--text-muted);
     text-align: center;
@@ -567,10 +570,28 @@
 }
 
 // ── Impression ────────────────────────────────────────────────────────────────
-// Le plan finit affiché en salle : on imprime la salle seule, sur fond blanc,
-// sans le menu, la barre d'outils ni la colonne de droite.
+// Le plan finit affiché en salle : A4 paysage, la salle seule sur fond blanc,
+// en couleurs. Chaque îlot a sa teinte (data-color), posée en aplat pâle pour
+// rester lisible même sur une imprimante fatiguée. Les pastilles de la légende
+// ne sont PAS imprimées : « Suivi rapproché » n'a rien à faire au mur.
+@page {
+  size: A4 landscape;
+  margin: 10mm;
+}
+
 @media print {
-  body { background: #fff !important; }
+  html, body {
+    background: #fff !important;
+  }
+
+  // Sans cela, Chrome n'imprime les aplats que si l'option « Graphiques
+  // d'arrière-plan » est cochée.
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
 
   .sidemenu,
   .sidemenu-overlay,
@@ -584,16 +605,24 @@
   .app, .main-content {
     display: block !important;
     min-height: 0 !important;
+    margin: 0 !important;
     padding: 0 !important;
+    background: #fff !important;
+    border-radius: 0 !important;
     overflow: visible !important;
   }
 
   .plan-de-classe {
+    --ink: #1e293b;
+    --ink-soft: #64748b;
+    --line: #cbd5e1;
+
     background: #fff !important;
-    color: #111827 !important;
-    box-shadow: none !important;
+    color: var(--ink) !important;
+    border-radius: 0 !important;
     padding: 0 !important;
     min-height: 0 !important;
+    font-family: inherit;
 
     .plan-toolbar,
     .plan-note,
@@ -601,12 +630,35 @@
     .class-picker,
     .header-sub,
     .block-mini,
-    .seat-clear {
+    .seat-clear,
+    .seat-remove {
       display: none !important;
     }
 
-    .page-header h2::after {
-      content: ' — ' attr(data-class);
+    // ── Titre ──
+    .page-header {
+      margin: 0 0 6mm !important;
+      padding-bottom: 3mm;
+      border-bottom: 2px solid #3b82f6;
+
+      .header-top { align-items: baseline; }
+
+      h2 {
+        font-size: 20pt !important;
+        color: var(--ink) !important;
+
+        // Le sélecteur de classe est masqué : le nom passe dans le titre.
+        &::after {
+          content: ' — ' attr(data-class);
+          color: #2563eb;
+        }
+      }
+    }
+
+    .print-meta {
+      display: block !important;
+      font-size: 9pt;
+      color: var(--ink-soft);
     }
 
     .plan-cols { display: block !important; }
@@ -614,36 +666,102 @@
     .room-card {
       background: #fff !important;
       border: 0 !important;
+      border-radius: 0 !important;
       padding: 0 !important;
       overflow: visible !important;
     }
 
-    .plan-seat {
-      background: #fff !important;
-      border: 1px solid #9ca3af !important;
+    .plan-room {
+      width: auto !important;
+      gap: 7mm !important;
+    }
+
+    .room-blocks { gap: 9mm !important; }
+
+    // ── Îlots : une teinte chacun ──
+    .plan-block {
+      --hue: #3b82f6;
+      --tint: #e0ecff;
       break-inside: avoid;
 
-      &::after { background: #d1d5db !important; }
+      &[data-color='1'] { --hue: #0d9488; --tint: #d5f5ee; }
+      &[data-color='2'] { --hue: #7c3aed; --tint: #ede9fe; }
+      &[data-color='3'] { --hue: #d97706; --tint: #fef3c7; }
+      &[data-color='4'] { --hue: #db2777; --tint: #fce7f3; }
+      &[data-color='5'] { --hue: #16a34a; --tint: #dcfce7; }
+    }
 
-      .seat-firstname { color: #111827 !important; }
-      .seat-lastname { color: #4b5563 !important; }
+    .block-head {
+      margin-bottom: 2mm !important;
+
+      input {
+        color: var(--hue) !important;
+        border: 0 !important;
+        font-size: 8.5pt !important;
+        letter-spacing: 0.12em;
+      }
+    }
+
+    .block-grid { gap: 2.5mm !important; }
+
+    // ── Bancs : trait fin, aplat pâle, liseré de couleur en haut ──
+    .plan-seat {
+      width: 32mm !important;
+      height: 16mm !important;
+      background: var(--tint) !important;
+      border: 0.5pt solid var(--line) !important;
+      border-top: 2.5pt solid var(--hue) !important;
+      border-radius: 2mm !important;
+      transform: none !important;
+      break-inside: avoid;
+
+      &::after { display: none !important; }
+
+      .seat-firstname {
+        color: var(--ink) !important;
+        font-size: 11pt !important;
+      }
+
+      .seat-lastname {
+        color: var(--ink-soft) !important;
+        font-size: 8pt !important;
+      }
+
+      &.free {
+        background: #fff !important;
+        border: 0.5pt dashed var(--line) !important;
+        border-top: 0.5pt dashed var(--line) !important;
+
+        .seat-empty { color: #cbd5e1 !important; }
+      }
 
       &.gone { visibility: hidden !important; }
     }
 
-    .block-head input {
-      color: #4b5563 !important;
-      border: 0 !important;
-    }
-
+    // ── Tableau et bureau ──
     .room-board {
-      background: #e5e7eb !important;
-      color: #111827 !important;
-      box-shadow: none !important;
+      height: 11mm !important;
+      background: #1f3b32 !important;
+      color: #e2f3ea !important;
+      border-radius: 2mm !important;
+      font-size: 9pt !important;
     }
 
-    .room-desk { border-color: #9ca3af !important; color: #4b5563 !important; }
+    .room-desk {
+      border: 0.75pt solid #94a3b8 !important;
+      border-radius: 2mm !important;
+      background: #f8fafc !important;
+      color: var(--ink-soft) !important;
+    }
 
-    .room-stats { color: #4b5563 !important; b { color: #111827 !important; } }
+    .room-stats {
+      margin-top: 5mm !important;
+      padding-top: 2mm !important;
+      border-top: 0.5pt solid var(--line) !important;
+      font-size: 8pt !important;
+      color: var(--ink-soft) !important;
+
+      b { color: var(--ink) !important; }
+    }
   }
 }

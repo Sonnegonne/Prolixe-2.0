@@ -584,7 +584,7 @@ const PlanDeClasse = () => {
     };
 
     const renderBlock = (block, bi) => (
-        <div className="plan-block" key={block.id}>
+        <div className="plan-block" key={block.id} data-color={bi % 6}>
             <div className="block-head">
                 {/* Le nom par défaut n'est remis qu'en quittant le champ : le
                     faire à chaque frappe empêcherait de tout effacer pour
@@ -648,6 +648,9 @@ const PlanDeClasse = () => {
                         <p className="header-sub">
                             Cliquez un élève puis un banc — ou glissez-le directement à sa place.
                             Deux bancs cliqués l'un après l'autre échangent leurs occupants.
+                        </p>
+                        <p className="print-meta">
+                            Plan du {new Date().toLocaleDateString('fr-BE', { day: 'numeric', month: 'long', year: 'numeric' })}
                         </p>
                     </div>
 
