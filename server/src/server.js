@@ -65,6 +65,9 @@ async function initDatabase() {
         // pas d'outil de migration.
         await require('./controllers/SmartschoolController').migrate(connection);
 
+        // Plans de classe, partagés entre les postes de l'enseignante.
+        await require('./controllers/PlanController').migrate(connection);
+
         connection.release();
     } catch (error) {
         console.error('❌ Erreur Critique DB:', error);
@@ -110,6 +113,7 @@ apiRouter.use('/school-years', require('./routes/SchoolYearRoute'));
 apiRouter.use('/holidays', require('./routes/HolidayRoute'));
 apiRouter.use('/subjects', require('./routes/SubjectsRoute'));
 apiRouter.use('/smartschool', require('./routes/SmartschoolRoute'));
+apiRouter.use('/plans', require('./routes/PlanRoute'));
 
 // Attachement du routeur centralisé
 app.use('/api', apiRouter);

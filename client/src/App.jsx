@@ -21,11 +21,12 @@ const Horaire = lazy(() => import('./components/horaire/Horaire'));
 const CorrectionList = lazy(() => import('./components/Correction/CorrectionList'));
 const CorrectionView = lazy(() => import('./components/Correction/CorrectionView'));
 const ConseilDeClasse = lazy(() => import('./components/cc/conseilClasse'));
+const PlanDeClasse = lazy(() => import('./components/plan/PlanDeClasse'));
 const DocumentGenerator = lazy(() => import('./components/DocumentGenerator/DocumentGenerator'));
 const Settings = lazy(() => import('./components/settings/Settings'));
 
 // Routes dont le contenu réclame toute la largeur disponible.
-const WIDE_CONTENT_ROUTES = ['/journal'];
+const WIDE_CONTENT_ROUTES = ['/journal', '/plan'];
 
 const RouteFallback = () => (
     <div className="route-loading" role="status" aria-live="polite">
@@ -78,6 +79,7 @@ const AuthenticatedAppContent = ({
                     <Route path="/horaire" element={<Horaire />} />
                     <Route path="/correction" element={<CorrectionList />} />
                     <Route path="/conseilDeClasse" element={<ConseilDeClasse />} />
+                    <Route path="/plan" element={<PlanDeClasse />} />
                     <Route path="/correction/:evaluationId" element={<CorrectionView />} />
                     <Route path="/document-generator" element={<DocumentGenerator />} />
                     <Route path="/settings" element={<Settings />} />

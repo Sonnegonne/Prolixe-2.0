@@ -29,6 +29,7 @@ const SideMenu = ({ isMenuOpen, toggleMenu, isCollapsed = false, toggleCollapse,
         { id: 'horaire', label: 'Emploi du temps', icon: '⏰', path: '/horaire' },
         { id: 'correction', label: 'Correction', icon: '✅', path: '/correction' },
         { id: 'conseilDeClasse', label: 'Conseil de classe', icon: '👥', path: '/conseilDeClasse' },
+        { id: 'plan', label: 'Plan de classe', icon: '🪑', path: '/plan' },
         { id: 'settings', label: 'Paramètres', icon: '⚙️', path: '/settings' },
     ];
 
