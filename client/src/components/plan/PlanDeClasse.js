@@ -31,6 +31,28 @@ const LAST_CLASS_KEY = 'prolixe_plan_classId';
 const SAVE_DELAY_MS = 700;
 const RETRY_DELAY_MS = 5000;
 
+// Impression sur une seule page A4 paysage : place utile et dimensions des
+// bancs, en millimètres — ce sont celles de la feuille d'impression
+// (PlanDeClasse.scss, @media print), à garder en accord avec elle.
+const PRINT = {
+    width: 272,       // 297 - 2 × 10 de marge, moins une réserve
+    height: 138,      // 210 - marges, titre, ligne de totaux et réserve
+    seatW: 32, seatH: 16, seatGap: 2.5,
+    blockGap: 9, blockHead: 8, roomGap: 7, board: 11,
+};
+
+// Échelle à appliquer à la salle pour qu'elle tienne en largeur comme en
+// hauteur ; jamais d'agrandissement.
+const printZoom = (plan) => {
+    if (!plan?.blocks?.length) return 1;
+    const span = (n, size) => n * size + Math.max(0, n - 1) * PRINT.seatGap;
+    const width = plan.blocks.reduce((sum, b) => sum + span(b.cols, PRINT.seatW), 0)
+        + (plan.blocks.length - 1) * PRINT.blockGap;
+    const rows = Math.max(...plan.blocks.map(b => b.rows));
+    const height = PRINT.blockHead + span(rows, PRINT.seatH) + PRINT.roomGap + PRINT.board;
+    return Math.min(1, PRINT.width / width, PRINT.height / height);
+};
+
 const SYNC_LABELS = {
     loading: 'Chargement du plan…',
     saving: 'Enregistrement…',
@@ -761,7 +783,10 @@ const PlanDeClasse = () => {
 
                     <div className="plan-cols">
                         <section className="room-card">
-                            <div className={`plan-room${plan.rot ? ' rotated' : ''}`}>
+                            <div
+                                className={`plan-room${plan.rot ? ' rotated' : ''}`}
+                                style={{ '--print-zoom': printZoom(plan) }}
+                            >
                                 <div className="room-blocks">
                                     {plan.blocks.map((block, bi) => renderBlock(block, bi))}
                                 </div>

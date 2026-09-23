@@ -582,6 +582,8 @@
 @media print {
   html, body {
     background: #fff !important;
+    height: auto !important;
+    min-height: 0 !important;
   }
 
   // Sans cela, Chrome n'imprime les aplats que si l'option « Graphiques
@@ -671,12 +673,21 @@
       overflow: visible !important;
     }
 
+    // Une seule page : les îlots restent sur une ligne, et la salle entière
+    // est réduite par --print-zoom, calculé depuis le plan (printZoom dans
+    // PlanDeClasse.js, qui reprend les dimensions en mm ci-dessous).
     .plan-room {
-      width: auto !important;
+      width: max-content !important;
+      min-width: 0 !important;
+      margin: 0 auto !important;
       gap: 7mm !important;
+      zoom: var(--print-zoom, 1);
     }
 
-    .room-blocks { gap: 9mm !important; }
+    .room-blocks {
+      flex-wrap: nowrap !important;
+      gap: 9mm !important;
+    }
 
     // ── Îlots : une teinte chacun ──
     .plan-block {
@@ -692,6 +703,7 @@
     }
 
     .block-head {
+      height: 6mm;
       margin-bottom: 2mm !important;
 
       input {
@@ -755,6 +767,7 @@
     }
 
     .room-stats {
+      break-before: avoid;
       margin-top: 5mm !important;
       padding-top: 2mm !important;
       border-top: 0.5pt solid var(--line) !important;
