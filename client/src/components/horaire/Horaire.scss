@@ -159,14 +159,20 @@ $radius-lg:     16px;
     box-shadow: 1px 0 0 0 $border;
   }
 
+  // Début en clair, fin en retrait : on lit l'heure d'un coup d'œil.
   .time-label-cell {
     background: $surface-2;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 2px;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 1rem;
+    font-variant-numeric: tabular-nums;
     color: $text-muted;
+
+    .time-start { font-size: 0.9rem; font-weight: 700; color: $text-secondary; }
+    .time-end { font-size: 0.72rem; }
     position: sticky;
     left: 0;
     z-index: 5;
@@ -487,4 +493,24 @@ $radius-lg:     16px;
   margin-top: 0.5rem;
   padding-top: 0.5rem;
   border-top: 1px solid $border;
+}
+
+// Étiquettes posées en tête d'un cours : l'école, et l'heure exacte quand la
+// ligne regroupe deux découpages décalés.
+.course-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+
+  .course-school { align-self: auto; }
+}
+
+.course-time {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.65rem;
+  color: $text-secondary;
+  white-space: nowrap;
 }

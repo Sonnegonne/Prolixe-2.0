@@ -6,6 +6,7 @@ import { useScheduleOverview, startMinutes } from '../../hooks/useScheduleOvervi
 import { useJournal } from "../../hooks/useJournal";
 import { useSchools } from "../../hooks/useSchools";
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { buildBands, formatMinutes } from '../../utils/scheduleBands';
 import { MEDIA } from '../../utils/breakpoints';
 import { format } from 'date-fns';
 import './Horaire.scss';
@@ -40,12 +41,19 @@ const courseVars = (assignment) => {
 
 // Carte d'un cours, commune aux deux modes. La pastille d'école n'apparaît
 // que dans la vue combinée : ailleurs, le contexte suffit à savoir où l'on est.
-const CourseCard = ({ course, school, compact = false }) => (
+// L'heure exacte n'est rappelée que si la ligne regroupe plusieurs découpages
+// (deux écoles décalées de quelques minutes) : sinon la colonne suffit.
+const CourseCard = ({ course, school, showTime = false, compact = false }) => (
     <div className="assignment-card" style={courseVars(course)}>
-        {school && (
-            <span className="course-school" style={{ '--school-color': school.color }}>
-                {school.short_name || school.name}
-            </span>
+        {(school || showTime) && (
+            <div className="course-tags">
+                {school && (
+                    <span className="course-school" style={{ '--school-color': school.color }}>
+                        {school.short_name || school.name}
+                    </span>
+                )}
+                {showTime && <span className="course-time">{course.time_label}</span>}
+            </div>
         )}
         <div className="subject-name">{course.subject_name}</div>
         <div className="assignment-meta">
@@ -138,12 +146,34 @@ const Horaire = () => {
         [hours]
     );
 
-    // Une ligne de grille : un libellé horaire, quel que soit le mode.
-    const gridRows = useMemo(() => (
-        isCombined
-            ? overview.rows.map(row => ({ key: row.libelle, libelle: row.libelle }))
-            : sortedHours.map(hour => ({ key: hour.id, libelle: hour.libelle, hourId: hour.id }))
-    ), [isCombined, overview.rows, sortedHours]);
+    // Cours de la semaine affichée, chacun avec son libellé horaire.
+    const weekCourses = useMemo(() => {
+        if (isCombined) return overview.courses;
+        const libelleById = new Map(sortedHours.map(hour => [String(hour.id), hour.libelle]));
+        return Object.entries(slots || {}).map(([key, assignment]) => {
+            const [day, hourId] = key.split('-');
+            return { ...assignment, day_of_week: day, time_label: libelleById.get(hourId) };
+        }).filter(course => course.time_label);
+    }, [isCombined, overview.courses, slots, sortedHours]);
+
+    // Lignes de la grille : seulement les créneaux où il y a cours, ceux des
+    // deux écoles qui se recouvrent étant fusionnés. Sans aucun cours, on
+    // montre la grille complète pour que la page ne soit pas vide.
+    const gridRows = useMemo(() => {
+        const used = weekCourses.map(course => course.time_label);
+        const all = isCombined ? overview.rows.map(row => row.libelle) : sortedHours.map(hour => hour.libelle);
+        return buildBands(used.length > 0 ? used : all);
+    }, [weekCourses, isCombined, overview.rows, sortedHours]);
+
+    const coursesByCell = useMemo(() => {
+        const map = new Map();
+        for (const course of weekCourses) {
+            const key = `${parseInt(course.day_of_week, 10)}-${course.time_label}`;
+            if (!map.has(key)) map.set(key, []);
+            map.get(key).push(course);
+        }
+        return map;
+    }, [weekCourses]);
 
     const setsList = useMemo(() => {
         return Array.isArray(availableSets?.data) ? availableSets.data : (Array.isArray(availableSets) ? availableSets : []);
@@ -163,16 +193,13 @@ const Horaire = () => {
     }, [activeDays, selectedDayId]);
 
     const gridStyle = {
-        gridTemplateColumns: `60px repeat(${activeDays.length}, minmax(140px, 1fr))`
+        gridTemplateColumns: `64px repeat(${activeDays.length}, minmax(140px, 1fr))`
     };
 
-    // Cours d'une case (jour × créneau) : 0, 1, ou plusieurs si deux écoles
-    // se chevauchent.
-    const cellCourses = (dayId, row) => {
-        if (isCombined) return overview.getCell(dayId, row.libelle);
-        const assignment = slots[`${dayId}-${row.hourId}`];
-        return assignment ? [assignment] : [];
-    };
+    // Cours d'une case (jour × bande) : 0, 1, ou plusieurs si deux écoles
+    // ont cours en même temps.
+    const cellCourses = (dayId, row) =>
+        row.libelles.flatMap(libelle => coursesByCell.get(`${dayId}-${libelle}`) || []);
 
     const isLoading = isCombined
         ? overview.loading
@@ -188,10 +215,14 @@ const Horaire = () => {
     }
 
     const selectedDay = activeDays.find(day => day.id === selectedDayId) || activeDays[0];
-    const daySlots = selectedDay
+    // Sur téléphone, la journée commence au premier cours et finit au dernier.
+    const allDaySlots = selectedDay
         ? gridRows.map(row => ({ row, courses: cellCourses(selectedDay.id, row) }))
         : [];
-    const dayHasCourse = daySlots.some(entry => entry.courses.length > 0);
+    const firstBusy = allDaySlots.findIndex(entry => entry.courses.length > 0);
+    const lastBusy = allDaySlots.length - 1 - [...allDaySlots].reverse().findIndex(entry => entry.courses.length > 0);
+    const daySlots = firstBusy === -1 ? [] : allDaySlots.slice(firstBusy, lastBusy + 1);
+    const dayHasCourse = daySlots.length > 0;
 
     return (
         <div className="horaire-container">
@@ -299,16 +330,25 @@ const Horaire = () => {
                                 className={`day-row${courses.length > 0 ? ' has-course' : ' is-free'}`}
                                 style={courses.length > 0 ? courseVars(courses[0]) : undefined}
                             >
-                                <span className="day-row-time">{row.libelle}</span>
+                                <span className="day-row-time">
+                                    {formatMinutes(row.start)}–{formatMinutes(row.end)}
+                                </span>
 
                                 {courses.length > 0 ? (
                                     <div className="day-row-body">
                                         {courses.map(course => (
                                             <div key={course.slot_id || course.id} className="day-row-course">
-                                                {isCombined && (
-                                                    <span className="course-school" style={{ '--school-color': course.school.color }}>
-                                                        {course.school.short_name || course.school.name}
-                                                    </span>
+                                                {(isCombined || row.libelles.length > 1) && (
+                                                    <div className="course-tags">
+                                                        {isCombined && (
+                                                            <span className="course-school" style={{ '--school-color': course.school.color }}>
+                                                                {course.school.short_name || course.school.name}
+                                                            </span>
+                                                        )}
+                                                        {row.libelles.length > 1 && (
+                                                            <span className="course-time">{course.time_label}</span>
+                                                        )}
+                                                    </div>
                                                 )}
                                                 <div className="subject-name">{course.subject_name}</div>
                                                 <div className="assignment-meta">
@@ -338,7 +378,10 @@ const Horaire = () => {
 
                             {gridRows.map((row) => (
                                 <React.Fragment key={row.key}>
-                                    <div className="time-label-cell">{row.libelle}</div>
+                                    <div className="time-label-cell">
+                                        <span className="time-start">{formatMinutes(row.start)}</span>
+                                        <span className="time-end">{formatMinutes(row.end)}</span>
+                                    </div>
                                     {activeDays.map((day) => {
                                         const courses = cellCourses(day.id, row);
 
@@ -349,6 +392,7 @@ const Horaire = () => {
                                                         key={course.slot_id || course.id}
                                                         course={course}
                                                         school={isCombined ? course.school : null}
+                                                        showTime={row.libelles.length > 1}
                                                         compact
                                                     />
                                                 )) : (
