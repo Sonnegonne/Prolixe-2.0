@@ -449,3 +449,144 @@ $radius-xl: 1.25rem;
   text-transform: uppercase;
   white-space: nowrap;
 }
+
+// ── Journée : rendez-vous, repère « maintenant », éléments passés ───────────
+.stats-grid .stat-card.violet {
+  border-left: 4px solid $violet;
+  .stat-icon { color: $violet; }
+}
+
+.daily-schedule-section {
+  .daily-empty { color: $text-muted; margin: 0; }
+
+  .daily-journal-slot.is-past,
+  .daily-appointment.is-past {
+    opacity: 0.45;
+    &:hover { opacity: 0.8; }
+  }
+
+  .daily-journal-slot.is-now {
+    background: $surface-3;
+    box-shadow: 0 0 0 1px $teal-glow, 0 4px 18px rgba(0, 0, 0, 0.35);
+  }
+
+  .course-info-header { gap: 0.5rem; }
+  .course-info-header .course-class-display { margin-left: auto; }
+}
+
+.now-badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: $teal;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+// Rendez-vous : même gabarit qu'un cours, mais violet et sans lien vers le
+// journal — ce n'est pas une heure de cours.
+.daily-appointment {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 1rem 1.25rem;
+  border-radius: $radius-md;
+  border: 1px solid rgba($violet, 0.35);
+  border-left: 4px solid $violet;
+  background: rgba($violet, 0.08);
+
+  .appointment-time {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+    color: #c4b5fd;
+    font-weight: 800;
+    font-size: 1rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .appointment-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .appointment-tags {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .appointment-kind,
+  .appointment-category {
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .appointment-kind { background: $violet; color: #fff; }
+  .appointment-category { background: rgba($violet, 0.2); color: #c4b5fd; }
+
+  .course-school-badge {
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .appointment-text {
+    margin: 0;
+    color: $text-primary;
+    font-weight: 600;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .appointment-location {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.8rem;
+    color: $text-secondary;
+  }
+
+  &.is-now { box-shadow: 0 0 0 1px rgba($violet, 0.6), 0 4px 18px rgba(0, 0, 0, 0.35); }
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.85rem 1rem;
+  }
+}
+
+// Repère de l'heure courante, glissé entre ce qui est fait et ce qui vient.
+.daily-now-line {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: $teal-light;
+  font-size: 0.75rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+
+  &::before,
+  &::after {
+    content: '';
+    height: 2px;
+    background: $teal;
+    border-radius: 2px;
+  }
+  &::before { width: 10px; }
+  &::after { flex: 1; }
+}

@@ -8,6 +8,7 @@ import { useScheduleOverview } from '../../hooks/useScheduleOverview';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import JournalService from '../../services/JournalService';
+import NoteService from '../../services/NoteService';
 
 import './dashboard.scss';
 import NoteSection from './NoteSection';
@@ -72,6 +73,21 @@ const Dashboard = () => {
 
     useEffect(() => { loadAllJournals(); }, [loadAllJournals]);
 
+    // Une note qui porte une date ET une heure est un rendez-vous : celles
+    // d'aujourd'hui rejoignent la journée, toutes écoles confondues. Elles
+    // sont rechargées à chaque ajout/modification dans « Notes & Tâches ».
+    const [appointments, setAppointments] = useState([]);
+    const loadAppointments = useCallback(async () => {
+        try {
+            setAppointments(await NoteService.getAgenda(todayStr));
+        } catch (error) {
+            console.error('Erreur agenda:', error);
+            setAppointments([]);
+        }
+    }, [todayStr]);
+
+    useEffect(() => { loadAppointments(); }, [loadAppointments]);
+
     const holidayInfo = getHolidayForDate(today);
 
     const todaySchedule = useMemo(() => {
@@ -126,12 +142,13 @@ const Dashboard = () => {
         const waiting = safeAssignments.filter(a => a.is_completed && !a.is_corrected);
 
         return [
-            { title: 'Total heures', value: overview.courses.length, icon: '🏫', color: 'primary' },
+            { title: 'Heures par semaine', value: overview.courses.length, icon: '🏫', color: 'primary' },
             { title: 'Cours aujourd\'hui', value: todaySchedule.length, icon: '📚', color: 'info' },
+            { title: "Rendez-vous aujourd'hui", value: appointments.length, icon: '📅', color: 'violet' },
             { title: 'Evaluations prévues', value: upcoming.length, icon: '📝', color: 'warning' },
             { title: 'Corrections en attente', value: waiting.length, icon: '✅', color: 'success' }
         ];
-    }, [overview.courses, todaySchedule, assignments]);
+    }, [overview.courses, todaySchedule, assignments, appointments]);
 
     const isLoading = loadingClasses || loadingJournal || overview.loading || loadingHolidays;
 
@@ -148,6 +165,7 @@ const Dashboard = () => {
                     <div className="column main-column">
                         <TodayScheduleSection
                             todaySchedule={todaySchedule}
+                            appointments={appointments}
                             holidayInfo={holidayInfo}
                             classes={classes}
                             showSchools={hasMultipleSchools}
@@ -156,7 +174,7 @@ const Dashboard = () => {
                         />
                     </div>
                     <div className="column side-column">
-                        <NoteSection />
+                        <NoteSection onChange={loadAppointments} />
                     </div>
                 </div>
             </div>

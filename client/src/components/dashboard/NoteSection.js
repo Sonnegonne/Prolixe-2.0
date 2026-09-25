@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import NoteService from '../../services/NoteService';
 import Note from './Note';
 import { useJournal } from '../../hooks/useJournal';
@@ -19,7 +19,20 @@ const STATE_LABELS = {
     'autre':                'Autre',
 };
 
-const NotesSection = () => {
+// Ordre d'affichage : rendez-vous et tâches à venir (du plus proche au plus
+// lointain), puis les notes sans date, puis ce qui est passé — grisé, en bas.
+const sortNotes = (notes, today) => {
+    const rank = (note) => (!note.date ? 1 : note.date < today ? 2 : 0);
+    return [...notes].sort((a, b) =>
+        rank(a) - rank(b)
+        || (rank(a) === 2
+            ? String(b.date).localeCompare(String(a.date))
+            : String(a.date || '').localeCompare(String(b.date || '')))
+        || String(a.time || '99').localeCompare(String(b.time || '99'))
+    );
+};
+
+const NotesSection = ({ onChange }) => {
     const { currentJournal } = useJournal();
     const journalId = currentJournal?.id;
 
@@ -48,6 +61,17 @@ const NotesSection = () => {
 
     useEffect(() => { fetchNotes(); }, [fetchNotes]);
 
+    // Toute modification peut créer, déplacer ou supprimer un rendez-vous du
+    // jour : le tableau de bord recharge alors sa journée.
+    const refresh = useCallback(async () => {
+        await fetchNotes();
+        onChange?.();
+    }, [fetchNotes, onChange]);
+
+    const today = formatDate(new Date());
+    const sortedNotes = useMemo(() => sortNotes(notes, today), [notes, today]);
+    const isAppointment = Boolean(newNoteDate && newNoteTime);
+
     const isFormInvalid = !newNoteText.trim();
 
     const handleAddNote = async (e) => {
@@ -63,6 +87,7 @@ const NotesSection = () => {
                 newNoteLocation
             );
             setNotes(prev => [response?.data || response, ...prev]);
+            onChange?.();
             setNewNoteText('');
             setNewNoteState('autre');
             setNewNoteDate(formatDate(new Date()));
@@ -92,13 +117,14 @@ const NotesSection = () => {
                     ) : notes.length === 0 ? (
                         <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Aucune note pour ce journal.</p>
                     ) : (
-                        notes.map(note => (
+                        sortedNotes.map(note => (
                             <Note
                                 key={note.id}
                                 note={note}
+                                isPast={Boolean(note.date) && note.date < today}
                                 stateLabel={STATE_LABELS[note.state] || note.state || 'Autre'}
-                                onDelete={fetchNotes}
-                                onUpdate={fetchNotes}
+                                onDelete={refresh}
+                                onUpdate={refresh}
                             />
                         ))
                     )}
@@ -132,6 +158,8 @@ const NotesSection = () => {
                             type="time"
                             value={newNoteTime}
                             onChange={(e) => setNewNoteTime(e.target.value)}
+                            aria-label="Heure (en fait un rendez-vous)"
+                            title="Avec une heure, la note devient un rendez-vous"
                         />
                         <input
                             type="text"
@@ -141,9 +169,15 @@ const NotesSection = () => {
                         />
 
                         <button type="submit" className="add-note-btn" disabled={isFormInvalid}>
-                            Ajouter
+                            {isAppointment ? 'Ajouter le rendez-vous' : 'Ajouter'}
                         </button>
                     </div>
+                    {isAppointment && (
+                        <p className="note-rdv-hint">
+                            📅 Rendez-vous le {new Date(`${newNoteDate}T00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à {newNoteTime}
+                            {newNoteDate === today && ' — il apparaîtra dans votre journée.'}
+                        </p>
+                    )}
                 </form>
 
             </div>

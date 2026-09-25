@@ -12,6 +12,15 @@ const getNotes = async (journalId) => {
 };
 
 /**
+ * Rendez-vous d'un jour (notes datées ET horodatées), tous journaux confondus.
+ * @param {string} date AAAA-MM-JJ
+ */
+const getAgenda = async (date) => {
+    const response = await api.get('/notes/agenda', { params: { date } });
+    return Array.isArray(response.data) ? response.data : [];
+};
+
+/**
  * Ajoute une note à un journal spécifique.
  */
 const addNote = async (journalId, text, state, date, time, location) => {
@@ -46,6 +55,7 @@ const deleteNote = async (id) => {
 
 const NoteService = {
     getNotes,
+    getAgenda,
     addNote,
     updateNote,
     deleteNote,

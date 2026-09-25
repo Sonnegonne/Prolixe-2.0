@@ -4,19 +4,21 @@ import ConfirmModal from '../ConfirmModal'; // Assurez-vous du chemin vers votre
 import { Clock, Navigation, Trash2, Pencil, X, Check } from "lucide-react";
 import './NoteSection.scss';
 
-const Note = ({ note, onDelete, onUpdate, stateLabel }) => {
+// « 2026-09-25 » -> « 25/09/2026 », sans passer par Date : une date sans
+// heure est lue en UTC et pouvait reculer d'un jour selon le fuseau.
+const toFrenchDate = (value) => {
+    const [y, m, d] = String(value || '').split('T')[0].split('-');
+    return d ? `${d}/${m}/${y}` : '';
+};
+
+const Note = ({ note, onDelete, onUpdate, stateLabel, isPast = false }) => {
     // Formatage de la date pour l'input
-    const getFormattedDate = (dateString) => {
-        if (!dateString) return '';
-        try {
-            return new Date(dateString).toISOString().split('T')[0];
-        } catch { return ''; }
-    };
+    const getFormattedDate = (dateString) => String(dateString || '').split('T')[0];
 
     const [isEditing, setIsEditing] = useState(false);
     const [editText, setEditText] = useState(note.text);
     const [editDate, setEditDate] = useState(getFormattedDate(note.date));
-    const [editTime, setEditTime] = useState(note.time || '');
+    const [editTime, setEditTime] = useState((note.time || '').slice(0, 5));
     const [editLocation, setEditLocation] = useState(note.location || '');
     const [editState, setEditState] = useState(note.state || 'autre');
 
@@ -51,17 +53,22 @@ const Note = ({ note, onDelete, onUpdate, stateLabel }) => {
         }
     };
 
-    // --- Sous-composants de rendu ---
-    const NoteDisplay = () => {
+    // --- Rendus ---
+    // Appelés comme des fonctions, pas comme <NoteEditForm /> : un composant
+    // redéfini à chaque rendu est démonté à chaque frappe, et le champ en
+    // cours de saisie perdait le focus après chaque caractère.
+    const renderDisplay = () => {
         const stateSlug = note.state?.toLowerCase().replace(/\s+/g, '-') || 'autre';
+        const isAppointment = Boolean(note.date && note.time);
         return (
-            <div className={`note-item state-${stateSlug}`} onDoubleClick={() => setIsEditing(true)}>
+            <div className={`note-item state-${stateSlug}${isAppointment ? ' is-appointment' : ''}${isPast ? ' is-past' : ''}`} onDoubleClick={() => setIsEditing(true)}>
                 <div className="note-content-wrapper">
                     <div className="note-header">
+                        {isAppointment && <strong className="note-category note-rdv">Rendez-vous</strong>}
                         {note.state && note.state !== 'autre' && (
                             <strong className="note-category">{stateLabel || note.state}</strong>
                         )}
-                        {note.date && <span className="note-date">🗓️ {new Date(note.date).toLocaleDateString('fr-FR')}</span>}
+                        {note.date && <span className="note-date">🗓️ {toFrenchDate(note.date)}</span>}
                         {note.time && <span className="note-time"><Clock size={13} /> {note.time.slice(0, 5)}</span>}
                         {note.location && <span className="note-location"><Navigation size={13} /> {note.location}</span>}
                     </div>
@@ -79,7 +86,7 @@ const Note = ({ note, onDelete, onUpdate, stateLabel }) => {
         );
     };
 
-    const NoteEditForm = () => (
+    const renderEditForm = () => (
         <div className="note-item-edit-form">
             <textarea
                 value={editText}
@@ -116,7 +123,7 @@ const Note = ({ note, onDelete, onUpdate, stateLabel }) => {
 
     return (
         <>
-                {isEditing ? <NoteEditForm /> : <NoteDisplay />}
+                {isEditing ? renderEditForm() : renderDisplay()}
                     <ConfirmModal
                         isOpen={isConfirmOpen}
                         onClose={() => setIsConfirmOpen(false)}
