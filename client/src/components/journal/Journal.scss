@@ -1209,3 +1209,16 @@ select.status-select {
   letter-spacing: 0.03em;
   white-space: nowrap;
 }
+
+// Vue combinée des deux écoles : la carte dit de quel établissement relève le cours.
+.journal-slot .slot-school {
+  margin-left: 0.4rem;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--school-color, #64748b);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}

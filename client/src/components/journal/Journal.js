@@ -33,15 +33,15 @@ import {
     RotateCcw
 } from 'lucide-react';
 
-import { useSchedule } from '../../hooks/useSchedule';
 import { useJournal } from '../../hooks/useJournal';
 import { useSchools } from '../../hooks/useSchools';
-import { useClasses } from '../../hooks/useClasses';
 import { useHolidays } from '../../hooks/useHolidays';
 import { useToast } from '../../hooks/useToast';
 import { useLocation } from 'react-router-dom';
 import JournalService from '../../services/JournalService';
 import ScheduleService from '../../services/ScheduleService';
+import ClassService from '../../services/ClassService';
+import { startMinutes } from '../../hooks/useScheduleOverview';
 import ConfirmModal from '../ConfirmModal';
 
 import './Journal.scss';
@@ -52,8 +52,39 @@ import './Journal.scss';
 const Journal = () => {
     const navigate = useNavigate();
     const { journals, loading: loadingJournals, currentJournal } = useJournal();
-    const { hasMultipleSchools } = useSchools();
+    const { schools, hasMultipleSchools, getSchoolById } = useSchools();
     const journalId = currentJournal?.id;
+
+    // Journaux affichés ensemble : celui de l'école courante, plus le journal
+    // actif de chaque autre école pour la même année scolaire. Un lundi partagé
+    // entre deux établissements doit tenir dans une seule semaine. Un journal
+    // archivé ouvert pour consultation reste seul.
+    const sources = useMemo(() => {
+        if (!currentJournal) return [];
+        const primary = {
+            journalId: currentJournal.id,
+            school: getSchoolById(currentJournal.school_id),
+        };
+        if (!hasMultipleSchools || currentJournal.is_archived || currentJournal.school_id == null) {
+            return [primary];
+        }
+        const others = schools
+            .filter(school => school.id !== currentJournal.school_id)
+            .map(school => {
+                const candidates = (journals || []).filter(j =>
+                    j.school_id === school.id && !j.is_archived
+                    && (!currentJournal.school_year_id || !j.school_year_id
+                        || j.school_year_id === currentJournal.school_year_id));
+                const storedId = parseInt(localStorage.getItem(`prolixe_currentJournalId_${school.id}`), 10);
+                const journal = candidates.find(j => j.id === storedId)
+                    || candidates.find(j => j.is_current)
+                    || candidates[0];
+                return journal ? { journalId: journal.id, school } : null;
+            })
+            .filter(Boolean);
+        return [primary, ...others];
+    }, [currentJournal, journals, schools, hasMultipleSchools, getSchoolById]);
+    const isCombined = sources.length > 1;
 
     useEffect(() => {
         if (!loadingJournals && !journalId && journals?.length > 0) {
@@ -78,7 +109,13 @@ const Journal = () => {
                     <h1>{currentJournal ? currentJournal.name : 'Journal de classe'}</h1>
                     {/* Deux ecoles peuvent avoir un journal de meme intitule :
                         l'etiquette dit lequel est ouvert. */}
-                    {hasMultipleSchools && currentJournal?.school_name && (
+                    {isCombined ? (
+                        sources.map(({ journalId: id, school }) => school && (
+                            <span key={id} className="journal-school-tag" style={{ backgroundColor: school.color }}>
+                                {school.short_name || school.name}
+                            </span>
+                        ))
+                    ) : hasMultipleSchools && currentJournal?.school_name && (
                         <span className="journal-school-tag" style={{ backgroundColor: currentJournal.school_color }}>
                             {currentJournal.school_name}
                         </span>
@@ -87,7 +124,7 @@ const Journal = () => {
             </header>
 
             {journalId ? (
-                <JournalView journalId={journalId} isArchived={currentJournal?.is_archived} />
+                <JournalView sources={sources} isArchived={!!currentJournal?.is_archived} />
             ) : (
                 <div className="no-journal-selected">
                     <AlertCircle size={48} />
@@ -165,11 +202,35 @@ const getClassColor = (subject, classLevel) => {
 // ---------------------------------------------------------------------------
 // Main weekly view
 // ---------------------------------------------------------------------------
-const JournalView = ({ journalId, isArchived }) => {
+const JournalView = ({ sources, isArchived }) => {
     const location = useLocation();
     const { success, error: showError } = useToast();
-    const { classes } = useClasses(journalId);
     const { getHolidayForDate, holidays, loading: loadingHolidays } = useHolidays();
+
+    // Le premier journal est celui de l'école courante : il fixe l'année
+    // scolaire (congés, bornes de navigation). Les autres s'y ajoutent.
+    const journalId = sources[0]?.journalId;
+    const journalIdsKey = sources.map(s => s.journalId).join(',');
+    const isCombined = sources.length > 1;
+    const schoolOfJournal = useMemo(() => {
+        const map = {};
+        sources.forEach(s => { map[s.journalId] = s.school; });
+        return map;
+    }, [sources]);
+
+    // --- classes de tous les journaux affichés ---
+    const [classes, setClasses] = useState([]);
+    useEffect(() => {
+        let cancelled = false;
+        Promise.all(sources.map(async ({ journalId: jid }) => {
+            try {
+                const response = await ClassService.getClasses(jid);
+                return (response?.data?.data || []).map(c => ({ ...c, journal_id: jid }));
+            } catch { return []; }
+        })).then(lists => { if (!cancelled) setClasses(lists.flat()); });
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [journalIdsKey]);
 
     // --- week navigation state ---
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -178,10 +239,12 @@ const JournalView = ({ journalId, isArchived }) => {
         [currentDate]
     );
 
-    // --- schedule detection ---
-    const [activeSetId, setActiveSetId] = useState(null);
-    const [activeSetName, setActiveSetName] = useState('');
-    const { slots, loading: loadingSlots, fetchSlots } = useSchedule(activeSetId);
+    // --- horaires actifs de la semaine, un par journal ---
+    // [{ journalId, school, setId, setName }] ; les créneaux de tous les
+    // horaires sont fusionnés dans `slots`, chacun portant son journal_id.
+    const [activeSets, setActiveSets] = useState([]);
+    const [slots, setSlots] = useState([]);
+    const [loadingSlots, setLoadingSlots] = useState(true);
 
     // --- journal entries (sessions) ---
     const [sessions, setSessions] = useState([]);
@@ -275,62 +338,72 @@ const JournalView = ({ journalId, isArchived }) => {
         [currentWeekStart, getHolidayForDate]);
 
 
+    // Les deux écoles n'ont pas le même découpage (« 8:25 » / « 8:30 ») : on
+    // trie sur les minutes de début, jamais sur le texte du libellé.
     const slotsByDay = useMemo(() => {
         const map = {};
-        const allSlots = Object.values(slots || {});
 
-        allSlots.forEach(slot => {
+        slots.forEach(slot => {
             const d = slot.day_of_week;
             if (!map[d]) map[d] = [];
             map[d].push(slot);
         });
 
         Object.keys(map).forEach(d => {
-            map[d].sort((a, b) => (a.time_label || '').localeCompare(b.time_label || ''));
+            map[d].sort((a, b) => startMinutes(a.time_label) - startMinutes(b.time_label));
         });
 
         return map;
     }, [slots]);
 
-    // Unique time rows for the grid
-    const timeRows = useMemo(() =>
-            [...new Map(
-                Object.values(slots || {}).map(s => [s.time_slot_id, s])
-            ).values()].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || '')),
-        [slots]);
+    // Journal auquel appartient un créneau : c'est dans CE journal que ses
+    // entrées doivent être écrites, quelle que soit l'école sélectionnée.
+    const journalOfSlot = useCallback((slotId) => {
+        const slot = slots.find(s => String(s.slot_id) === String(slotId));
+        return slot?.journal_id ?? journalId;
+    }, [slots, journalId]);
 
-    useEffect(() => {
-        setActiveSetId(null);
-        setActiveSetName('');
-
-        let cancelled = false;
-        const detect = async () => {
-            try {
-                const dateStr = format(currentWeekStart, 'yyyy-MM-dd');
-                // journalId : sans lui, un horaire appartenant a un autre journal
-                // et couvrant la meme periode peut etre retenu.
-                const res = await ScheduleService.getScheduleIdByDate(dateStr, journalId);
-                if (cancelled) return;
-                if (res?.success && res.id) {
-                    setActiveSetId(res.id);
-                    setActiveSetName(res.name || `Horaire : #${res.name}`);
-                }
-            } catch { }
-        };
-        detect();
-        return () => { cancelled = true; };
-    }, [currentWeekStart, journalId]);
+    // Créneaux du même jour et de la même école que `slot` : annuler la
+    // journée ou la déclarer fériée ne concerne qu'un établissement.
+    const sameSchoolDaySlots = useCallback((slot, dayIndex) =>
+        (slotsByDay[dayIndex] || []).filter(s => String(s.journal_id) === String(slot.journal_id)),
+    [slotsByDay]);
 
     // -----------------------------------------------------------------------
-    // Step 2 – Reload slots whenever activeSetId OR the week changes.
-    // Using the formatted week string as a dependency guarantees a fresh fetch
-    // even when the same model ID covers multiple consecutive weeks.
+    // Horaire actif de chaque journal pour la semaine, puis ses créneaux.
+    // journalId : sans lui, un horaire appartenant a un autre journal et
+    // couvrant la meme periode peut etre retenu.
     // -----------------------------------------------------------------------
     const currentWeekKey = format(currentWeekStart, 'yyyy-MM-dd');
     useEffect(() => {
-        if (activeSetId) fetchSlots();
+        let cancelled = false;
+        const load = async () => {
+            setLoadingSlots(true);
+            const results = await Promise.all(sources.map(async ({ journalId: jid, school }) => {
+                try {
+                    const res = await ScheduleService.getScheduleIdByDate(currentWeekKey, jid);
+                    if (!res?.success || !res.id) return null;
+                    const full = await ScheduleService.getScheduleById(res.id);
+                    const setSlots = (full?.data || []).map(s => ({
+                        ...s,
+                        // Une partie du code lit `slot.id` : on l'aligne sur slot_id.
+                        id: s.slot_id,
+                        journal_id: jid,
+                        school,
+                    }));
+                    return { journalId: jid, school, setId: res.id, setName: res.name, slots: setSlots };
+                } catch { return null; }
+            }));
+            if (cancelled) return;
+            const found = results.filter(Boolean);
+            setActiveSets(found);
+            setSlots(found.flatMap(r => r.slots));
+            setLoadingSlots(false);
+        };
+        load();
+        return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeSetId, currentWeekKey]); // fetchSlots omitted: stable ref from hook
+    }, [journalIdsKey, currentWeekKey]);
 
     // -----------------------------------------------------------------------
     // Fetch journal entries (sessions)
@@ -341,9 +414,10 @@ const JournalView = ({ journalId, isArchived }) => {
         try {
             const startDate = format(currentWeekStart, 'yyyy-MM-dd');
             const endDate = format(addDays(currentWeekStart, 4), 'yyyy-MM-dd');
-            const response = await JournalService.getJournalEntries(startDate, endDate, journalId);
+            const responses = await Promise.all(journalIdsKey.split(',').map(jid =>
+                JournalService.getJournalEntries(startDate, endDate, jid)));
 
-            const rawEntries = response?.data?.data || response?.data || [];
+            const rawEntries = responses.flatMap(response => response?.data?.data || response?.data || []);
 
             // --- TRANSFORMATION DES DONNÉES ---
             const mappedEntries = rawEntries.map(entry => {
@@ -364,7 +438,7 @@ const JournalView = ({ journalId, isArchived }) => {
         } finally {
             setLoadingSessions(false);
         }
-    }, [journalId, currentWeekStart]);
+    }, [journalId, journalIdsKey, currentWeekStart]);
 
     useEffect(() => { loadSessions(); }, [loadSessions]);
 
@@ -377,15 +451,18 @@ const JournalView = ({ journalId, isArchived }) => {
         try {
             const startDate = format(currentWeekStart, 'yyyy-MM-dd');
             const endDate = format(addDays(currentWeekStart, 4), 'yyyy-MM-dd');
-            const response = await JournalService.getAssignments(journalId, startDate, endDate);
-            const data = response?.data?.data || response?.data || [];
+            const responses = await Promise.all(journalIdsKey.split(',').map(jid =>
+                JournalService.getAssignments(jid, startDate, endDate)));
+            const data = responses
+                .flatMap(response => response?.data?.data || response?.data || [])
+                .sort((a, b) => toDateKey(a.due_date).localeCompare(toDateKey(b.due_date)));
             setAssignments(data);
         } catch {
             setAssignments([]);
         } finally {
             setLoadingAssignments(false);
         }
-    }, [journalId, currentWeekStart]);
+    }, [journalId, journalIdsKey, currentWeekStart]);
 
     useEffect(() => { loadAssignments(); }, [loadAssignments]);
 
@@ -475,7 +552,7 @@ const JournalView = ({ journalId, isArchived }) => {
 
         await JournalService.upsertJournalEntry({
             id: entry?.id || null,
-            journal_id: journalId,
+            journal_id: slot.journal_id ?? journalId,
             schedule_slot_id: slotId,
             date: dateKey,
             planned_work: nextPlanned,
@@ -502,7 +579,7 @@ const JournalView = ({ journalId, isArchived }) => {
                     // IMPORTANT : On s'assure que schedule_slot_id est présent dans le payload
                     const payload = {
                         ...entryData,
-                        journal_id: journalId,
+                        journal_id: entryData.journal_id || journalOfSlot(slotId),
                         schedule_slot_id: slotId // On l'ajoute explicitement ici
                     };
 
@@ -527,7 +604,7 @@ const JournalView = ({ journalId, isArchived }) => {
             }, 900);
             return { ...prev, [key]: id };
         });
-    }, [isArchived, journalId, selectedSlot, loadSessions, showError]);
+    }, [isArchived, journalOfSlot, selectedSlot, loadSessions, showError]);
     // -----------------------------------------------------------------------
     // Open journal modal
     // -----------------------------------------------------------------------
@@ -566,8 +643,8 @@ const JournalView = ({ journalId, isArchived }) => {
     useEffect(() => {
         const { openSlotId, weekDate } = location.state || {};
 
-        if (openSlotId && !loadingSlots && Object.keys(slots).length > 0) {
-            const slotToOpen = Object.values(slots).find(s =>
+        if (openSlotId && !loadingSlots && slots.length > 0) {
+            const slotToOpen = slots.find(s =>
                 String(s.slot_id || s.id) === String(openSlotId)
             );
 
@@ -610,7 +687,7 @@ const JournalView = ({ journalId, isArchived }) => {
         // Propagate cancel/holiday notes
         if ((courseStatus === 'holiday' || (courseStatus === 'cancelled' && cancelEntireDay)) && field === 'notes') {
             const tag = courseStatus === 'holiday' ? '[HOLIDAY]' : '[CANCELLED]';
-            (slotsByDay[selectedDay.dayIndex] || [])
+            sameSchoolDaySlots(selectedSlot, selectedDay.dayIndex)
                 .filter(s => s.id !== selectedSlot.id)
                 .forEach(s => {
                     const ex = getSession(s.id, selectedDay.key);
@@ -633,7 +710,7 @@ const JournalView = ({ journalId, isArchived }) => {
     const handleResetEntireDay = async () => {
         if (isArchived || !selectedDay) return;
 
-        const daySlots = slotsByDay[selectedDay.dayIndex] || [];
+        const daySlots = sameSchoolDaySlots(selectedSlot, selectedDay.dayIndex);
 
         try {
             await Promise.all(daySlots.map(s => {
@@ -644,7 +721,7 @@ const JournalView = ({ journalId, isArchived }) => {
                 if (existing) {
                     return JournalService.upsertJournalEntry({
                         id: existing.id,
-                        journal_id: journalId,
+                        journal_id: s.journal_id,
                         schedule_slot_id: sId,
                         date: selectedDay.key,
                         planned_work: existing.planned_work || '',
@@ -697,14 +774,14 @@ const JournalView = ({ journalId, isArchived }) => {
         setJournalForm(newForm);
 
         const currentSlotId = selectedSlot.slot_id || selectedSlot.id;
-        const daySlots = slotsByDay[selectedDay.dayIndex] || [];
+        const daySlots = sameSchoolDaySlots(selectedSlot, selectedDay.dayIndex);
         const otherSlots = daySlots.filter(s => String(s.slot_id || s.id) !== String(currentSlotId));
 
         try {
             // 1. Sauvegarder le créneau actuel immédiatement
             await JournalService.upsertJournalEntry({
                 id: currentEntryId,
-                journal_id: journalId,
+                journal_id: selectedSlot.journal_id,
                 schedule_slot_id: currentSlotId,
                 date: selectedDay.key,
                 ...newForm
@@ -717,7 +794,7 @@ const JournalView = ({ journalId, isArchived }) => {
                     const existing = getSession(sId, selectedDay.key);
                     return JournalService.upsertJournalEntry({
                         id: existing?.id || null,
-                        journal_id: journalId,
+                        journal_id: s.journal_id,
                         schedule_slot_id: sId,
                         date: selectedDay.key,
                         planned_work: '',
@@ -739,7 +816,7 @@ const JournalView = ({ journalId, isArchived }) => {
                     if (existing?.actual_work === '[HOLIDAY]') {
                         return JournalService.upsertJournalEntry({
                             id: existing.id,
-                            journal_id: journalId,
+                            journal_id: s.journal_id,
                             schedule_slot_id: sId,
                             date: selectedDay.key,
                             planned_work: existing.planned_work || '',
@@ -760,7 +837,7 @@ const JournalView = ({ journalId, isArchived }) => {
                     const existing = getSession(sId, selectedDay.key);
                     return JournalService.upsertJournalEntry({
                         id: existing?.id || null,
-                        journal_id: journalId,
+                        journal_id: s.journal_id,
                         schedule_slot_id: sId,
                         date: selectedDay.key,
                         planned_work: '',
@@ -785,7 +862,7 @@ const JournalView = ({ journalId, isArchived }) => {
         setCancelEntireDay(checked);
 
         if (checked) {
-            const daySlots = slotsByDay[selectedDay.dayIndex] || [];
+            const daySlots = sameSchoolDaySlots(selectedSlot, selectedDay.dayIndex);
             // On filtre pour ne pas traiter le slot déjà ouvert (qui sera sauvé par le formulaire)
             const otherSlots = daySlots.filter(s => String(s.slot_id || s.id) !== String(selectedSlot.slot_id || selectedSlot.id));
 
@@ -798,7 +875,7 @@ const JournalView = ({ journalId, isArchived }) => {
 
                     return JournalService.upsertJournalEntry({
                         id: existing?.id || null,
-                        journal_id: journalId,
+                        journal_id: s.journal_id,
                         schedule_slot_id: sId, // Nom attendu par le contrôleur
                         date: selectedDay.key,
                         planned_work: '',
@@ -844,7 +921,7 @@ const JournalView = ({ journalId, isArchived }) => {
             if (checked) {
                 const newAssignment = {
                     id: existing?.id || null,
-                    journal_id: journalId,
+                    journal_id: selectedSlot.journal_id,
                     class_id: selectedSlot.class_id,
                     schedule_slot_id: slotId,
                     subject: selectedSlot.subject_name || selectedSlot.subject,
@@ -928,7 +1005,7 @@ const JournalView = ({ journalId, isArchived }) => {
                 }
                 const payload = {
                     ...journalForm,               // Données textuelles (planned, actual, notes)
-                    journal_id: journalId,        // ID du carnet
+                    journal_id: nextSlot.journal_id, // ID du carnet
                     date: selectedDay.key,        // Date du jour
                     schedule_slot_id: nextId      // L'ID du créneau cible (forcé à la fin)
                 };
@@ -973,7 +1050,7 @@ const JournalView = ({ journalId, isArchived }) => {
             );
             const payload = {
                 ...assignmentForm,
-                journal_id: journalId,
+                journal_id: classes.find(c => String(c.id) === String(assignmentForm.class_id))?.journal_id ?? journalId,
                 schedule_slot_id: targetSlot ? (targetSlot.slot_id || targetSlot.id) : null,
             };
 
@@ -1093,6 +1170,11 @@ const JournalView = ({ journalId, isArchived }) => {
                 <div className="slot-meta">
                 <span className="slot-time">
                     {slot.time_label}
+                    {isCombined && slot.school && (
+                        <span className="slot-school" style={{ '--school-color': slot.school.color }}>
+                            {slot.school.short_name || slot.school.name}
+                        </span>
+                    )}
                 </span>
                     <span className="slot-badge" style={{ backgroundColor: `${subjectColor}15`, color: subjectColor }}>
                     {slot.class_name || '—'}
@@ -1168,7 +1250,11 @@ const JournalView = ({ journalId, isArchived }) => {
 
                 <div className="schedule-indicator">
                     <Clock size={14} />
-                    <span>Horaire : <strong>{activeSetId ? activeSetName : 'Aucun modèle actif'}</strong></span>
+                    <span>Horaire : <strong>{activeSets.length > 0
+                        ? activeSets.map(a => isCombined && a.school
+                            ? `${a.school.short_name || a.school.name} · ${a.setName}`
+                            : a.setName).join(' + ')
+                        : 'Aucun modèle actif'}</strong></span>
                 </div>
             </div>
 
@@ -1177,7 +1263,7 @@ const JournalView = ({ journalId, isArchived }) => {
                 <div className="weekly-section">
                     <h2>Journal des cours</h2>
 
-                    {!activeSetId ? (
+                    {activeSets.length === 0 ? (
                         <div className="error-box">
                             <AlertCircle size={20} />
                             <p>Aucun emploi du temps n'est défini pour cette période ({format(currentWeekStart, 'dd/MM/yyyy', { locale: fr })} – {format(addDays(currentWeekStart, 4), 'dd/MM/yyyy', { locale: fr })}).</p>
@@ -1418,7 +1504,10 @@ const JournalView = ({ journalId, isArchived }) => {
                                     </div>
                                     <div className="form-group checkbox-group">
                                         <input type="checkbox" id="cancelDay" checked={cancelEntireDay} onChange={handleCancelEntireDayChange} disabled={isArchived} />
-                                        <label htmlFor="cancelDay">Annuler toute la journée</label>
+                                        <label htmlFor="cancelDay">
+                                            Annuler toute la journée
+                                            {isCombined && selectedSlot.school && ` (${selectedSlot.school.short_name || selectedSlot.school.name})`}
+                                        </label>
                                     </div>
                                 </>
                             )}
@@ -1475,7 +1564,10 @@ const JournalView = ({ journalId, isArchived }) => {
                                     <label>Classe</label>
                                     <select value={assignmentForm.class_id} onChange={e => setAssignmentForm({ ...assignmentForm, class_id: e.target.value, schedule_slot_id: '' })} required disabled={isArchived}>
                                         <option value="">Sélectionnez une classe</option>
-                                        {classes.map(cls => <option key={cls.id} value={cls.id}>{cls.name}</option>)}
+                                        {classes.map(cls => {
+                                            const school = isCombined ? schoolOfJournal[cls.journal_id] : null;
+                                            return <option key={cls.id} value={cls.id}>{cls.name}{school ? ` (${school.short_name || school.name})` : ''}</option>;
+                                        })}
                                     </select>
                                 </div>
                                 <div className="form-group">
