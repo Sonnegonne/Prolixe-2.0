@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     format,
@@ -640,8 +640,15 @@ const JournalView = ({ sources, isArchived }) => {
         setShowJournalModal(true);
     }, [getSession, slotsByDay]);
 
+    // Le tableau de bord demande l'ouverture d'un créneau via location.state.
+    // Cette demande ne vaut qu'une fois : React Router garde location.state
+    // tant qu'on ne navigue pas (window.history.replaceState ne le vide pas),
+    // et l'effet se relance à chaque rechargement des entrées — donc après
+    // chaque sauvegarde automatique, ce qui rouvrait ce créneau-là.
+    const consumedOpenRequest = useRef(null);
     useEffect(() => {
         const { openSlotId, weekDate } = location.state || {};
+        if (consumedOpenRequest.current === location.key) return;
 
         if (openSlotId && !loadingSlots && slots.length > 0) {
             const slotToOpen = slots.find(s =>
@@ -651,12 +658,11 @@ const JournalView = ({ sources, isArchived }) => {
             const dayToOpen = weekDays.find(d => d.key === weekDate);
 
             if (slotToOpen && dayToOpen) {
+                consumedOpenRequest.current = location.key;
                 handleOpenModal(slotToOpen, dayToOpen);
-                // On "nettoie" l'état
-                window.history.replaceState({}, document.title);
             }
         }
-    }, [location.state, slots, loadingSlots, weekDays, handleOpenModal]);
+    }, [location.key, location.state, slots, loadingSlots, weekDays, handleOpenModal]);
 
     const handleCloseModal = useCallback(() => {
         setShowJournalModal(false);
