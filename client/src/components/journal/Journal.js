@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
     format,
     startOfWeek,
@@ -50,7 +49,6 @@ import './Journal.scss';
 // Root component – picks the right journal or shows picker
 // ---------------------------------------------------------------------------
 const Journal = () => {
-    const navigate = useNavigate();
     const { journals, loading: loadingJournals, currentJournal } = useJournal();
     const { schools, hasMultipleSchools, getSchoolById } = useSchools();
     const journalId = currentJournal?.id;
@@ -85,12 +83,6 @@ const Journal = () => {
         return [primary, ...others];
     }, [currentJournal, journals, schools, hasMultipleSchools, getSchoolById]);
     const isCombined = sources.length > 1;
-
-    useEffect(() => {
-        if (!loadingJournals && !journalId && journals?.length > 0) {
-            navigate(`/journal/${journals[0].id}`);
-        }
-    }, [journalId, journals, loadingJournals, navigate]);
 
     if (loadingJournals) {
         return (

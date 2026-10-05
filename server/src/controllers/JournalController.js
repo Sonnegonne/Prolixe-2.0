@@ -123,7 +123,8 @@ class JournalController {
                 await SchoolController.assertOwned(connection, schoolId, userId);
             } else {
                 const schools = await SchoolController.listForUser(connection, userId);
-                schoolId = schools.length > 0 ? schools[0].id : null;
+                const fallback = schools.find(s => s.is_active !== 0) || schools[0];
+                schoolId = fallback ? fallback.id : null;
             }
 
             // Le journal « courant » se compte par ecole : en basculer une ne

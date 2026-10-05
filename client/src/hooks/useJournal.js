@@ -1,5 +1,5 @@
 // client/src/hooks/useJournal.js
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import JournalService from '../services/JournalService';
 import { useAuth } from './useAuth';
 import { useSchools } from './useSchools';
@@ -77,13 +77,26 @@ export const JournalProvider = ({ children }) => {
     // Le journal courant suit l'ecole choisie. On ne touche a rien tant que le
     // journal en place appartient deja a cette ecole : sans ce garde-fou, la
     // selection manuelle de l'utilisatrice serait ecrasee a chaque rendu.
+    const lastSchoolIdRef = useRef(currentSchoolId);
     useEffect(() => {
         if (!isAuthenticated || loadingSchools || journals.length === 0) return;
-        // Un journal archive volontairement ouvert (consultation) reste en
-        // place tant qu'il releve de l'ecole affichee.
-        if (currentJournal
-            && (!currentSchoolId || currentJournal.school_id === currentSchoolId || currentJournal.school_id == null)) {
-            return;
+        const schoolChanged = lastSchoolIdRef.current !== currentSchoolId;
+        lastSchoolIdRef.current = currentSchoolId;
+        if (currentJournal) {
+            // `currentJournal` est une copie prise avant le dernier
+            // rechargement : on la confronte a la liste fraiche. Un journal
+            // supprime, ou archive alors qu'on y travaillait, est remplace.
+            // Un journal archive volontairement ouvert (consultation) reste,
+            // meme s'il releve d'une ecole desactivee, jusqu'au prochain
+            // changement d'ecole.
+            const fresh = journals.find(j => j.id === currentJournal.id);
+            const sameSchool = !currentSchoolId || currentJournal.school_id === currentSchoolId || currentJournal.school_id == null;
+            const justArchived = fresh && fresh.is_archived && !currentJournal.is_archived;
+            const consulting = currentJournal.is_archived && !schoolChanged;
+            if (fresh && !justArchived && (sameSchool || consulting)) {
+                if (fresh !== currentJournal) setCurrentJournal(fresh);
+                return;
+            }
         }
         setCurrentJournal(pickJournalForSchool(journals, currentSchoolId));
     }, [isAuthenticated, loadingSchools, journals, currentSchoolId, currentJournal, pickJournalForSchool]);

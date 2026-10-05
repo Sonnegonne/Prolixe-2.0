@@ -24,7 +24,9 @@ class ScheduleController {
         }
 
         try {
-            const schools = await SchoolController.listForUser(pool, userId);
+            // Une ecole desactivee n'a plus de cours a montrer dans la journee.
+            const schools = (await SchoolController.listForUser(pool, userId))
+                .filter(s => s.is_active !== 0);
             const payload = [];
 
             for (const school of schools) {

@@ -4,7 +4,7 @@
 // le reste (journal, classes, élèves, horaire) se crée ensuite dans l'école
 // affichée, choisie par la bascule du menu.
 import React, { useState } from 'react';
-import { Building2, Pencil, Trash2, Plus } from 'lucide-react';
+import { Building2, Pencil, Trash2, Plus, Power } from 'lucide-react';
 import { useSchools } from '../../../hooks/useSchools';
 import { useToast } from '../../../hooks/useToast';
 import ConfirmModal from '../../ConfirmModal';
@@ -14,7 +14,10 @@ const PALETTE = ['#2563eb', '#db2777', '#0d9488', '#d97706', '#7c3aed', '#be123c
 const EMPTY_FORM = { id: null, name: '', short_name: '', color: PALETTE[0] };
 
 const SchoolManager = () => {
-    const { schools, currentSchoolId, selectSchool, createSchool, updateSchool, deleteSchool, loading } = useSchools();
+    const {
+        allSchools: schools, currentSchoolId, selectSchool,
+        createSchool, updateSchool, deleteSchool, setSchoolActive, loading
+    } = useSchools();
     const { success, error: showError } = useToast();
 
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -67,6 +70,21 @@ const SchoolManager = () => {
         }
     };
 
+    const isActive = (school) => school.is_active === undefined || Boolean(Number(school.is_active));
+    const activeCount = schools.filter(isActive).length;
+
+    const handleToggleActive = async (school) => {
+        const activate = !isActive(school);
+        try {
+            await setSchoolActive(school.id, activate);
+            success(activate
+                ? `« ${school.name} » est de nouveau active.`
+                : `« ${school.name} » est désactivée. Ses journaux restent consultables.`);
+        } catch (err) {
+            showError(err.response?.data?.message || 'Changement impossible.');
+        }
+    };
+
     if (loading) return <div className="school-manager loading">⏳ Chargement…</div>;
 
     return (
@@ -82,10 +100,11 @@ const SchoolManager = () => {
             </header>
 
             <div className="school-list">
-                {schools.map(school => (
+                {/* Les écoles désactivées passent en bas de liste. */}
+                {[...schools].sort((a, b) => isActive(b) - isActive(a)).map(school => (
                     <div
                         key={school.id}
-                        className={`school-card${school.id === currentSchoolId ? ' current' : ''}`}
+                        className={`school-card${school.id === currentSchoolId ? ' current' : ''}${isActive(school) ? '' : ' inactive'}`}
                         style={{ '--school-color': school.color }}
                     >
                         <span className="school-badge">{school.short_name || school.name.slice(0, 2).toUpperCase()}</span>
@@ -93,12 +112,26 @@ const SchoolManager = () => {
                             <strong>{school.name}</strong>
                             <span className="school-meta">
                                 {school.journals_count} journal{school.journals_count > 1 ? 'aux' : ''}
-                                {school.id === currentSchoolId && <em> · affichée</em>}
+                                {!isActive(school) && <span className="inactive-tag"> · désactivée</span>}
+                                {isActive(school) && school.id === currentSchoolId && <em> · affichée</em>}
                             </span>
                         </div>
                         <div className="school-actions">
-                            {school.id !== currentSchoolId && (
+                            {isActive(school) && school.id !== currentSchoolId && (
                                 <button className="action-btn" onClick={() => selectSchool(school.id)}>Afficher</button>
+                            )}
+                            {/* Désactiver la dernière école active laisserait
+                                l'application sans rien à afficher. */}
+                            {(!isActive(school) || activeCount > 1) && (
+                                <button
+                                    className="action-btn"
+                                    onClick={() => handleToggleActive(school)}
+                                    title={isActive(school)
+                                        ? "Je n'enseigne plus ici : masquer cette école partout"
+                                        : 'Réafficher cette école dans toute l’application'}
+                                >
+                                    <Power size={16} /> {isActive(school) ? 'Désactiver' : 'Réactiver'}
+                                </button>
                             )}
                             <button className="action-btn" onClick={() => openEdit(school)} aria-label="Modifier">
                                 <Pencil size={16} />

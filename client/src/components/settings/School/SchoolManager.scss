@@ -56,6 +56,15 @@
     flex-wrap: wrap;
 
     &.current { background: var(--white-transparent-sm); }
+
+    &.inactive {
+        border-left-color: var(--border-color);
+
+        .school-badge { background: var(--border-color); color: var(--text-muted); }
+        .school-info strong { color: var(--text-muted); }
+    }
+
+    .inactive-tag { color: var(--text-muted); }
 }
 
 .school-badge {

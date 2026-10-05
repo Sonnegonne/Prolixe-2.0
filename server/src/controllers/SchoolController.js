@@ -54,6 +54,10 @@ class SchoolController {
             ['JOURNALS', 'school_id', 'INT NULL DEFAULT NULL'],
             ['SCH_HOURS', 'school_id', 'INT NULL DEFAULT NULL'],
             ['ATTRIBUTIONS', 'school_id', 'INT NULL DEFAULT NULL'],
+            // Une ecole ou l'on n'enseigne plus est desactivee, pas supprimee :
+            // ses journaux archives restent consultables, mais elle sort de la
+            // bascule, de la journee du tableau de bord et du journal combine.
+            ['SCHOOLS', 'is_active', 'TINYINT(1) NOT NULL DEFAULT 1'],
         ]) {
             if (await SchoolController.hasColumn(connection, table, column)) continue;
             await connection.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
@@ -233,12 +237,25 @@ class SchoolController {
                 : school.short_name;
             const color = req.body.color || school.color;
             const order = req.body.display_order !== undefined ? parseInt(req.body.display_order, 10) : school.display_order;
+            const isActive = req.body.is_active !== undefined ? (req.body.is_active ? 1 : 0) : school.is_active;
+
+            // Desactiver la derniere ecole active laisserait l'application
+            // sans rien a afficher.
+            if (!isActive && school.is_active) {
+                const [[{ n }]] = await pool.execute(
+                    'SELECT COUNT(*) AS n FROM SCHOOLS WHERE user_id = ? AND is_active = 1 AND id <> ?',
+                    [req.user.id, id]
+                );
+                if (n === 0) {
+                    return res.status(409).json({ success: false, message: 'Impossible de désactiver votre seule école active.' });
+                }
+            }
 
             await pool.execute(
-                'UPDATE SCHOOLS SET name = ?, short_name = ?, color = ?, display_order = ? WHERE id = ? AND user_id = ?',
-                [name, shortName.slice(0, 16), color, Number.isFinite(order) ? order : school.display_order, id, req.user.id]
+                'UPDATE SCHOOLS SET name = ?, short_name = ?, color = ?, display_order = ?, is_active = ? WHERE id = ? AND user_id = ?',
+                [name, shortName.slice(0, 16), color, Number.isFinite(order) ? order : school.display_order, isActive, id, req.user.id]
             );
-            res.json({ success: true, data: { ...school, name, short_name: shortName, color } });
+            res.json({ success: true, data: { ...school, name, short_name: shortName, color, is_active: isActive } });
         } catch (error) {
             SchoolController.handleError(res, error, "Erreur mise à jour de l'école.");
         }
