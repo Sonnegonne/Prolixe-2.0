@@ -474,6 +474,57 @@ $radius-xl: 1.25rem;
   .course-info-header .course-class-display { margin-left: auto; }
 }
 
+// « Prendre les présences » : ouvre l'écran Absences de Smartschool par l'extension.
+.daily-schedule-section .daily-schedule-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+
+  h2 { margin: 0; }
+
+  .take-presences {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  .take-presences-button,
+  .take-presences-choice {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-radius: 999px;
+    font-weight: 700;
+    cursor: pointer;
+    &:disabled { opacity: 0.6; cursor: wait; }
+  }
+
+  .take-presences-button {
+    padding: 0.45rem 1rem;
+    border: 1px solid $teal;
+    background: $teal;
+    color: #fff;
+    font-size: 0.9rem;
+    &:hover:not(:disabled) { filter: brightness(1.1); }
+  }
+
+  .take-presences-choice {
+    padding: 0.3rem 0.75rem;
+    border: 1px solid $teal;
+    background: transparent;
+    color: $teal;
+    font-size: 0.8rem;
+    &:hover { background: $teal; color: #fff; }
+  }
+
+  .take-presences-message { color: $text-muted; font-size: 0.8rem; }
+}
+
 .now-badge {
   padding: 1px 7px;
   border-radius: 999px;

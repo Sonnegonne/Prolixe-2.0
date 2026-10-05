@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { CalendarClock, MapPin } from 'lucide-react';
+import { CalendarClock, MapPin, UserCheck } from 'lucide-react';
+import { askExtension, extensionHasPresences } from '../../utils/extensionBridge';
 
 // « 8:30 » comme « 08:30 » : on compare des minutes, jamais du texte.
 const toMinutes = (hhmm) => {
@@ -17,6 +18,68 @@ const NOTE_LABELS = {
     'cap':                  'CAP',
     'conseil-de-classe':    'Conseil de classe',
     'réunions-de-parents':  'Réunion parents',
+};
+
+// L'extension « Outils Smartschool » ouvre l'écran Absences de Smartschool
+// sur la classe et l'heure du cours en cours (un cours compte dès 10 minutes
+// avant son début). Sans elle (ou trop ancienne), aucun bouton.
+const usePresenceBridge = () => {
+    const [available, setAvailable] = useState(false);
+    useEffect(() => {
+        let vivant = true;
+        extensionHasPresences().then(ok => { if (vivant) setAvailable(ok); });
+        return () => { vivant = false; };
+    }, []);
+    return available;
+};
+
+// Sans `slotId`, l'extension choisit elle-même le cours en cours ; avec, elle
+// ouvre ce cours-là (quand plusieurs se donnent en même temps).
+const openPresences = async (slotId) => {
+    const res = await askExtension('presence-open', slotId ? { slotId } : undefined, 20000);
+    if (!res.ok) throw new Error(res.error);
+    return res.data || {};
+};
+
+const TakePresencesButton = () => {
+    const [state, setState] = useState({ busy: false, message: null, choices: [] });
+
+    const open = async (slotId) => {
+        setState({ busy: true, message: null, choices: [] });
+        try {
+            const r = await openPresences(slotId);
+            if (r.url) { setState({ busy: false, message: null, choices: [] }); return; }
+            if (r.status === 'several') {
+                setState({ busy: false, message: 'Plusieurs cours en ce moment :', choices: r.courses || [] });
+                return;
+            }
+            setState({
+                busy: false,
+                choices: [],
+                message: r.status === 'outside' ? "Cette classe n'est pas dans Smartschool."
+                    : r.next ? `Aucun cours en ce moment — prochain : ${r.next.className} à ${String(r.next.timeLabel).split('-')[0]}.`
+                    : 'Aucun cours en ce moment.',
+            });
+        } catch (error) {
+            setState({ busy: false, message: error.message, choices: [] });
+        }
+    };
+
+    return (
+        <div className="take-presences">
+            <button type="button" className="take-presences-button" onClick={() => open()} disabled={state.busy}
+                    title="Ouvrir l'écran Absences de Smartschool sur la classe et l'heure du cours en cours">
+                <UserCheck size={16} aria-hidden="true" />
+                {state.busy ? 'Ouverture…' : 'Prendre les présences'}
+            </button>
+            {state.message && <span className="take-presences-message">{state.message}</span>}
+            {state.choices.map(c => (
+                <button key={c.slotId} type="button" className="take-presences-choice" onClick={() => open(c.slotId)}>
+                    {c.className}{c.subjectName ? ` — ${c.subjectName}` : ''}
+                </button>
+            ))}
+        </div>
+    );
 };
 
 // Minutes écoulées depuis minuit, rafraîchies chaque minute : la journée
@@ -115,6 +178,7 @@ const AppointmentItem = ({ note, showSchools, timing }) => {
 
 const TodayScheduleSection = ({ todaySchedule, appointments = [], holidayInfo, classes, loading, onSlotClick, showSchools = false }) => {
     const now = useNowMinutes();
+    const presenceAvailable = usePresenceBridge();
 
     if (loading) return <div className="loading-message">Chargement de l'emploi du temps...</div>;
 
@@ -144,7 +208,10 @@ const TodayScheduleSection = ({ todaySchedule, appointments = [], holidayInfo, c
 
     return (
         <div className="daily-schedule-section">
-            <h2>Votre journée d'aujourd'hui</h2>
+            <div className="daily-schedule-header">
+                <h2>Votre journée d'aujourd'hui</h2>
+                {presenceAvailable && !holidayInfo && <TakePresencesButton />}
+            </div>
 
             {holidayInfo && (
                 <div className="holiday-info">
