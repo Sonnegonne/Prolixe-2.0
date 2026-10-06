@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
     ChevronsRight,
@@ -56,6 +56,18 @@ const CorrectionView = () => {
 
     const [editingCommentKey, setEditingCommentKey] = useState(null);
     const [absentStudents, setAbsentStudents] = useState(new Set());
+
+    // Élèves modifiés depuis leur dernier enregistrement : id -> n° de version.
+    // On n'enregistre que ceux-là en changeant d'élève, pour ne pas inscrire un
+    // 0 à un élève qu'on a seulement consulté. Le n° de version évite d'effacer
+    // la marque d'une modification faite pendant qu'un envoi était en cours.
+    const dirtyRef = useRef(new Map());
+    // Les envois partent l'un après l'autre : un ancien état d'un élève ne peut
+    // pas arriver au serveur après un plus récent.
+    const saveQueueRef = useRef(Promise.resolve());
+    const markDirty = useCallback((studentId) => {
+        dirtyRef.current.set(studentId, (dirtyRef.current.get(studentId) || 0) + 1);
+    }, []);
 
     const fetchData = useCallback(async () => {
         if (!evaluationId) return;
@@ -166,25 +178,87 @@ const CorrectionView = () => {
         };
     }, [absentStudents, criteria, grades, studentTotals]);
 
+    // Enregistre tous les élèves modifiés (celui qu'on quitte, plus ceux dont un
+    // envoi précédent a échoué). L'état est photographié maintenant ; l'envoi,
+    // lui, attend son tour dans la file. Renvoie true si tout est enregistré.
+    const savePending = useCallback(() => {
+        const pending = [...dirtyRef.current.entries()];
+        if (pending.length === 0) return saveQueueRef.current.then(() => true);
+        const payload = pending.map(([studentId]) => prepareStudentPayload(studentId));
+
+        const run = async () => {
+            setIsSaving(true);
+            try {
+                await saveGrades(evaluationId, payload, { is_corrected: true, is_completed: true });
+                pending.forEach(([studentId, version]) => {
+                    if (dirtyRef.current.get(studentId) === version) dirtyRef.current.delete(studentId);
+                });
+                return true;
+            } catch (err) {
+                const names = pending
+                    .map(([id]) => students.find(s => s.id === id))
+                    .filter(Boolean)
+                    .map(s => `${s.firstname} ${s.lastname}`)
+                    .join(', ');
+                showError(`Échec de l'enregistrement (${names}). Nouvel essai au prochain changement d'élève.`);
+                return false;
+            } finally {
+                setIsSaving(false);
+            }
+        };
+        const next = saveQueueRef.current.then(run);
+        saveQueueRef.current = next.catch(() => false);
+        return next;
+    }, [prepareStudentPayload, evaluationId, students, showError]);
+
+    // Tout changement d'élève (Suivant, menu déroulant, liste de la classe)
+    // enregistre l'élève qu'on quitte, sans attendre la réponse du serveur.
+    const selectStudent = (studentId) => {
+        if (!studentId || studentId === selectedStudentId) return;
+        setEditingCommentKey(null);
+        setSelectedStudentId(studentId);
+        savePending();
+    };
+
     const handleSaveCurrentAndNext = async () => {
         if (!selectedStudentId) return;
-        setIsSaving(true);
+        const currentIndex = students.findIndex(s => s.id === selectedStudentId);
+        if (currentIndex < students.length - 1) {
+            selectStudent(students[currentIndex + 1].id);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else if (await savePending()) {
+            success('Dernier élève enregistré !');
+        }
+    };
 
+    // En quittant l'écran (Retour, menu…), on envoie ce qui n'est pas enregistré ;
+    // en fermant l'onglet, le navigateur demande confirmation.
+    const savePendingRef = useRef(savePending);
+    savePendingRef.current = savePending;
+    useEffect(() => {
+        const dirty = dirtyRef.current;
+        const warn = (e) => {
+            if (dirty.size === 0) return;
+            e.preventDefault();
+            e.returnValue = '';
+        };
+        window.addEventListener('beforeunload', warn);
+        return () => {
+            window.removeEventListener('beforeunload', warn);
+            if (dirty.size > 0) savePendingRef.current();
+        };
+    }, []);
+
+    const handleSaveAll = async () => {
+        const versions = new Map(dirtyRef.current);
         try {
-            const payload = [prepareStudentPayload(selectedStudentId)];
-            await saveGrades(evaluationId, payload, { is_corrected: true, is_completed: true });
-
-            const currentIndex = students.findIndex(s => s.id === selectedStudentId);
-            if (currentIndex < students.length - 1) {
-                setSelectedStudentId(students[currentIndex + 1].id);
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            } else {
-                success('Dernier élève enregistré !');
-            }
+            await saveGrades(evaluationId, students.map(s => prepareStudentPayload(s.id)), { is_corrected: true, is_completed: true });
+            versions.forEach((version, studentId) => {
+                if (dirtyRef.current.get(studentId) === version) dirtyRef.current.delete(studentId);
+            });
+            success('Classe sauvegardée');
         } catch (err) {
-            showError('Erreur lors de la sauvegarde de cet élève.');
-        } finally {
-            setIsSaving(false);
+            showError('Erreur lors de la sauvegarde de la classe.');
         }
     };
 
@@ -199,6 +273,7 @@ const CorrectionView = () => {
             }
         }
 
+        markDirty(studentId);
         setGrades(prev => ({
             ...prev,
             [key]: { ...(prev[key] || { comment: '' }), score: newScore }
@@ -228,7 +303,7 @@ const CorrectionView = () => {
                     <p>{evaluation.class_name} — {new Date(evaluation.evaluation_date).toLocaleDateString()}</p>
                 </div>
                 <button
-                    onClick={() => saveGrades(evaluationId, students.map(s => prepareStudentPayload(s.id)), { is_corrected: true, is_completed: true }).then(() => success('Classe sauvegardée'))}
+                    onClick={handleSaveAll}
                     className="btn-secondary"
                 >
                     <Save size={18} /> Sauvegarder tout
@@ -242,7 +317,7 @@ const CorrectionView = () => {
                             <UserCheck size={18} />
                             <select
                                 value={selectedStudentId || ''}
-                                onChange={(e) => setSelectedStudentId(Number(e.target.value))}
+                                onChange={(e) => selectStudent(Number(e.target.value))}
                             >
                                 {students.map(s => (
                                     <option key={s.id} value={s.id}>
@@ -259,6 +334,7 @@ const CorrectionView = () => {
                                     const next = new Set(absentStudents);
                                     if (e.target.checked) next.add(selectedStudentId);
                                     else next.delete(selectedStudentId);
+                                    markDirty(selectedStudentId);
                                     setAbsentStudents(next);
                                 }}
                             /> <span>Absent</span>
@@ -276,10 +352,13 @@ const CorrectionView = () => {
                                 autoFocus
                                 value={grades[`global-${selectedStudentId}`]?.comment || ''}
                                 onBlur={() => setEditingCommentKey(null)}
-                                onChange={(e) => setGrades(prev => ({
-                                    ...prev,
-                                    [`global-${selectedStudentId}`]: { comment: e.target.value }
-                                }))}
+                                onChange={(e) => {
+                                    markDirty(selectedStudentId);
+                                    setGrades(prev => ({
+                                        ...prev,
+                                        [`global-${selectedStudentId}`]: { comment: e.target.value }
+                                    }));
+                                }}
                                 disabled={isSelectedStudentAbsent}
                             />
                         ) : (
@@ -341,9 +420,12 @@ const CorrectionView = () => {
                                                         autoFocus
                                                         value={gradeInfo.comment}
                                                         onBlur={() => setEditingCommentKey(null)}
-                                                        onChange={(e) => setGrades(prev => ({
-                                                            ...prev, [key]: { ...prev[key], comment: e.target.value }
-                                                        }))}
+                                                        onChange={(e) => {
+                                                            markDirty(selectedStudentId);
+                                                            setGrades(prev => ({
+                                                                ...prev, [key]: { ...prev[key], comment: e.target.value }
+                                                            }));
+                                                        }}
                                                     />
                                                 ) : (
                                                     <div className="comment-preview" onClick={() => !isSelectedStudentAbsent && setEditingCommentKey(key)}>
@@ -371,10 +453,9 @@ const CorrectionView = () => {
                         <button
                             onClick={handleSaveCurrentAndNext}
                             className="btn-next-student"
-                            disabled={isSaving}
                         >
-                            {isSaving ? 'Enregistrement...' : (isLastStudent ? 'Terminer la session' : 'Suivant')}
-                            {!isSaving && <ChevronsRight size={20} />}
+                            {isLastStudent ? (isSaving ? 'Enregistrement...' : 'Terminer la session') : 'Suivant'}
+                            <ChevronsRight size={20} />
                         </button>
                     </div>
                 </div>
@@ -391,7 +472,7 @@ const CorrectionView = () => {
                                 <div
                                     key={s.id}
                                     className={`summary-item ${s.id === selectedStudentId ? 'active' : ''} ${isCorrected ? 'is-corrected' : 'is-pending'}`}
-                                    onClick={() => setSelectedStudentId(s.id)}
+                                    onClick={() => selectStudent(s.id)}
                                 >
                                     <div className="student-info">
                                         <div className="status-marker">
