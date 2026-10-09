@@ -9,6 +9,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
     Users, Printer, Shuffle, Eraser, Palette, RotateCw,
     Plus, Minus, X, UserPlus, Armchair, LayoutGrid, Trash2, RefreshCw,
+    PanelRightClose, PanelRightOpen,
 } from 'lucide-react';
 import { useJournal } from '../../hooks/useJournal';
 import { useClasses } from '../../hooks/useClasses';
@@ -25,6 +26,7 @@ import {
 import './PlanDeClasse.scss';
 
 const LAST_CLASS_KEY = 'prolixe_plan_classId';
+const SIDE_HIDDEN_KEY = 'prolixe_plan_sideHidden';
 
 // Délai entre la dernière modification et l'envoi au serveur : un
 // redimensionnement en quatre clics part en une seule requête.
@@ -88,6 +90,15 @@ const PlanDeClasse = () => {
     const layoutMode = mode === 'layout';
     // Sélection courante : { type: 'seat', bi, si } ou { type: 'student', id }.
     const [selection, setSelection] = useState(null);
+
+    // Colonne de droite repliable : la salle prend alors toute la largeur et
+    // les bancs grandissent. Le choix est retenu sur ce poste.
+    const [sideHidden, setSideHidden] = useState(() => {
+        try { return localStorage.getItem(SIDE_HIDDEN_KEY) === '1'; } catch { return false; }
+    });
+    useEffect(() => {
+        try { localStorage.setItem(SIDE_HIDDEN_KEY, sideHidden ? '1' : '0'); } catch { /* sans stockage */ }
+    }, [sideHidden]);
     const [confirmModal, setConfirmModal] = useState({
         isOpen: false, title: '', message: '', onConfirm: null,
     });
@@ -760,6 +771,19 @@ const PlanDeClasse = () => {
                         <button type="button" className="tool" onClick={() => window.print()}>
                             <Printer size={15} /> Imprimer
                         </button>
+                        <button
+                            type="button"
+                            className={`tool${sideHidden ? ' on' : ''}`}
+                            aria-pressed={sideHidden}
+                            title={sideHidden
+                                ? 'Réafficher la liste « à placer » et la légende des couleurs'
+                                : 'Masquer la colonne de droite pour voir le plan en grand'}
+                            onClick={() => setSideHidden(h => !h)}
+                        >
+                            {sideHidden
+                                ? <><PanelRightOpen size={15} /> Afficher le panneau</>
+                                : <><PanelRightClose size={15} /> Plan en grand</>}
+                        </button>
 
                         <span className={`tool-hint sync-${syncStatus}`} role="status" aria-live="polite">
                             {SYNC_LABELS[syncStatus]}
@@ -781,7 +805,7 @@ const PlanDeClasse = () => {
                         </p>
                     )}
 
-                    <div className="plan-cols">
+                    <div className={`plan-cols${sideHidden ? ' side-hidden' : ''}`}>
                         <section className="room-card">
                             <div
                                 className={`plan-room${plan.rot ? ' rotated' : ''}`}
@@ -803,6 +827,7 @@ const PlanDeClasse = () => {
                             </div>
                         </section>
 
+                        {!sideHidden && (
                         <aside className="plan-side">
                             <div className="side-card">
                                 <h3><Armchair size={15} /> À placer ({unplaced.length})</h3>
@@ -861,6 +886,7 @@ const PlanDeClasse = () => {
                                 </div>
                             </div>
                         </aside>
+                        )}
                     </div>
                 </>
             )}

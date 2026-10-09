@@ -169,6 +169,22 @@
     @include below($bp-tablet) {
       grid-template-columns: minmax(0, 1fr);
     }
+
+    // Colonne de droite masquée : la salle occupe toute la largeur et les
+    // bancs sont agrandis pour se lire de loin (projection au tableau).
+    &.side-hidden {
+      grid-template-columns: minmax(0, 1fr);
+
+      .plan-seat {
+        width: clamp(110px, 13vw, 180px);
+        height: 84px;
+
+        .seat-firstname { font-size: 1.05rem; }
+        .seat-lastname { font-size: 0.82rem; }
+      }
+
+      .block-grid { gap: 0.75rem; }
+    }
   }
 
   .room-card {
