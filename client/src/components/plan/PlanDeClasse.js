@@ -5,7 +5,7 @@
 // La disposition est rangée en base, une par classe, et suit donc
 // l'enseignante d'un poste à l'autre. Chaque modification part au serveur
 // après un court délai ; voir la section « Synchronisation ».
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
 import {
     Users, Printer, Shuffle, Eraser, Palette, RotateCw,
     Plus, Minus, X, UserPlus, Armchair, LayoutGrid, Trash2, RefreshCw,
@@ -55,6 +55,12 @@ const printZoom = (plan) => {
     return Math.min(1, PRINT.width / width, PRINT.height / height);
 };
 
+// « Plan en grand » : la salle est mise à l'échelle pour tenir entièrement
+// dans l'écran, sans barre de défilement ; on l'agrandit au plus de FIT_MAX.
+const FIT_MAX = 1.8;
+const FIT_MIN = 0.3;
+const FIT_BOTTOM_MARGIN = 16;
+
 const SYNC_LABELS = {
     loading: 'Chargement du plan…',
     saving: 'Enregistrement…',
@@ -99,6 +105,47 @@ const PlanDeClasse = () => {
     useEffect(() => {
         try { localStorage.setItem(SIDE_HIDDEN_KEY, sideHidden ? '1' : '0'); } catch { /* sans stockage */ }
     }, [sideHidden]);
+
+    // Mise à l'échelle par transform : la salle garde sa taille naturelle
+    // dans la mise en page (donc mesurable), et le cadre qui l'entoure prend
+    // la taille réduite ou agrandie.
+    const roomCardRef = useRef(null);
+    const roomRef = useRef(null);
+    const [fit, setFit] = useState(null);
+
+    useLayoutEffect(() => {
+        if (!sideHidden) { setFit(null); return undefined; }
+        const card = roomCardRef.current;
+        const room = roomRef.current;
+        if (!card || !room) return undefined;
+
+        const measure = () => {
+            const cs = getComputedStyle(card);
+            const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+            const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+            const stats = card.querySelector('.room-stats');
+            const statsH = stats ? stats.offsetHeight + parseFloat(getComputedStyle(stats).marginTop || 0) : 0;
+            const availW = card.clientWidth - padX;
+            const availH = window.innerHeight - card.getBoundingClientRect().top
+                - padY - statsH - FIT_BOTTOM_MARGIN;
+            const w = room.offsetWidth;
+            const h = room.offsetHeight;
+            if (!w || !h || availW <= 0) return;
+            const scale = Math.max(FIT_MIN, Math.min(FIT_MAX, availW / w, Math.max(availH, 200) / h));
+            setFit(prev => (prev && Math.abs(prev.scale - scale) < 0.005 && prev.w === w && prev.h === h
+                ? prev : { scale, w, h }));
+        };
+
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(card);
+        observer.observe(room);
+        window.addEventListener('resize', measure);
+        return () => {
+            observer.disconnect();
+            window.removeEventListener('resize', measure);
+        };
+    }, [sideHidden, planState]);
     const [confirmModal, setConfirmModal] = useState({
         isOpen: false, title: '', message: '', onConfirm: null,
     });
@@ -806,10 +853,20 @@ const PlanDeClasse = () => {
                     )}
 
                     <div className={`plan-cols${sideHidden ? ' side-hidden' : ''}`}>
-                        <section className="room-card">
+                        <section className="room-card" ref={roomCardRef}>
                             <div
+                                className="room-fit"
+                                style={sideHidden && fit
+                                    ? { width: fit.w * fit.scale, height: fit.h * fit.scale }
+                                    : undefined}
+                            >
+                            <div
+                                ref={roomRef}
                                 className={`plan-room${plan.rot ? ' rotated' : ''}`}
-                                style={{ '--print-zoom': printZoom(plan) }}
+                                style={{
+                                    '--print-zoom': printZoom(plan),
+                                    ...(sideHidden && fit ? { '--fit-scale': fit.scale } : {}),
+                                }}
                             >
                                 <div className="room-blocks">
                                     {plan.blocks.map((block, bi) => renderBlock(block, bi))}
@@ -818,6 +875,7 @@ const PlanDeClasse = () => {
                                     <div className="room-board">Tableau</div>
                                     <div className="room-desk">Bureau</div>
                                 </div>
+                            </div>
                             </div>
 
                             <div className="room-stats">
