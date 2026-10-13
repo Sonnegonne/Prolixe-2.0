@@ -63,6 +63,32 @@ const CourseCard = ({ course, school, showTime = false, compact = false }) => (
     </div>
 );
 
+// Horaire ouvert par défaut : parmi ceux en vigueur aujourd'hui, le dernier
+// encodé (id le plus haut) ; à défaut, le dernier encodé tout court. La liste
+// arrive triée par date de début : en prendre le dernier élément ouvrait un
+// horaire à venir (ou mal daté) plutôt que celui qui fait foi.
+// Les dates arrivent en ISO UTC (« 2026-08-31T22:00:00Z » pour le 1er
+// septembre) : on les relit en heure locale avant de comparer.
+const dayOf = (value) => {
+    const date = value ? new Date(value) : null;
+    return date && !Number.isNaN(date.getTime()) ? format(date, 'yyyy-MM-dd') : '';
+};
+const pickDefaultSet = (sets) => {
+    if (sets.length === 0) return "";
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const inForce = sets.filter(set => dayOf(set.start_time) <= today && today <= dayOf(set.end_time));
+    const pool = inForce.length > 0 ? inForce : sets;
+    return pool.reduce((latest, set) => (set.id > latest.id ? set : latest)).id;
+};
+
+// « du 01/09 au 30/06 » : deux horaires de même nom se distinguent.
+const formatSetPeriod = (set) => {
+    const [ys, ms, ds] = dayOf(set.start_time).split('-');
+    const [ye, me, de] = dayOf(set.end_time).split('-');
+    if (!ds || !de) return '';
+    return ` (du ${ds}/${ms}/${ys.slice(2)} au ${de}/${me}/${ye.slice(2)})`;
+};
+
 const Horaire = () => {
     const { currentJournal, journals } = useJournal();
     const { schools, currentSchoolId, hasMultipleSchools } = useSchools();
@@ -115,10 +141,7 @@ const Horaire = () => {
             const result = await fetchAllSets(scopedJournalId);
             if (cancelled) return;
             const setsArray = result?.data || result;
-            // Le dernier horaire créé est celui qu'on veut voir par défaut.
-            setSelectedSetId(Array.isArray(setsArray) && setsArray.length > 0
-                ? setsArray[setsArray.length - 1].id
-                : "");
+            setSelectedSetId(pickDefaultSet(Array.isArray(setsArray) ? setsArray : []));
         };
         init();
         return () => { cancelled = true; };
@@ -256,7 +279,7 @@ const Horaire = () => {
                                 <option value="">Choisir un planning...</option>
                                 {setsList.map(set => (
                                     <option key={set.id} value={set.id}>
-                                        {set.name || set.libelle || `Horaire #${set.id}`}
+                                        {(set.name || set.libelle || `Horaire #${set.id}`) + formatSetPeriod(set)}
                                     </option>
                                 ))}
                             </select>
