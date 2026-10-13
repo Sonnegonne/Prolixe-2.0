@@ -2,6 +2,7 @@
 const pool = require('../../config/database');
 const SchoolController = require('./SchoolController');
 const ScheduleHoursController = require('./ScheduleHoursController');
+const { syncScheduleSlots } = require('../utils/syncScheduleSlots');
 
 class ScheduleController {
 
@@ -193,29 +194,9 @@ class ScheduleController {
             connection = await pool.getConnection();
             await connection.beginTransaction();
 
-            // Suppression des anciens créneaux pour ce set
-            await connection.execute(
-                'DELETE FROM SCHEDULE_SLOTS WHERE schedule_set_id = ?',
-                [schedule_set_id]
-            );
-
-            if (slots && slots.length > 0) {
-                // Préparation des données avec les nouvelles FK
-                const values = slots.map(s => [
-                    schedule_set_id,
-                    s.day_of_week,
-                    s.time_slot_id,
-                    s.class_id || null,   // Nouvelle colonne
-                    s.subject_id || null, // Nouvelle colonne
-                    s.room || null
-                ]);
-
-                // Insertion en masse
-                await connection.query(
-                    'INSERT INTO SCHEDULE_SLOTS (schedule_set_id, day_of_week, time_slot_id, class_id, subject_id, room) VALUES ?',
-                    [values]
-                );
-            }
+            // Mise a jour en place : les creneaux gardent leur id, et donc leurs
+            // lecons (voir syncScheduleSlots).
+            await syncScheduleSlots(connection, schedule_set_id, slots);
 
             await connection.commit();
             res.json({ success: true, message: "Emploi du temps sauvegardé avec succès." });

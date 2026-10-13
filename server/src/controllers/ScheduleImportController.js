@@ -12,6 +12,7 @@
 const pool = require('../../config/database');
 const ScheduleHoursController = require('./ScheduleHoursController');
 const { parseSchedulePdf } = require('../utils/schedulePdfParser');
+const { syncScheduleSlots } = require('../utils/syncScheduleSlots');
 
 const HOUR_RE = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]-([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
 const NEUTRAL_COLOR = '#95a5a6';
@@ -314,8 +315,8 @@ class ScheduleImportController {
                 setId = r.insertId;
             }
 
-            // 5. Creneaux : on repart d'une grille vide, comme saveSlots.
-            await connection.execute('DELETE FROM SCHEDULE_SLOTS WHERE schedule_set_id = ?', [setId]);
+            // 5. Creneaux : mise a jour en place, pour qu'un remplacement ne
+            // detache pas les lecons deja ecrites (voir syncScheduleSlots).
 
             const seen = new Set();
             const values = [];
@@ -327,15 +328,16 @@ class ScheduleImportController {
                 const classId = classIds.get(s.className) || null;
                 const room = String(s.room || '').trim().slice(0, 50);
                 if (!subjectId && !classId && !room) continue;
-                values.push([setId, parseInt(s.day, 10), hourByLibelle.get(s.libelle), classId, subjectId, room]);
+                values.push({
+                    day_of_week: parseInt(s.day, 10),
+                    time_slot_id: hourByLibelle.get(s.libelle),
+                    class_id: classId,
+                    subject_id: subjectId,
+                    room
+                });
             }
 
-            if (values.length) {
-                await connection.query(
-                    'INSERT INTO SCHEDULE_SLOTS (schedule_set_id, day_of_week, time_slot_id, class_id, subject_id, room) VALUES ?',
-                    [values]
-                );
-            }
+            await syncScheduleSlots(connection, setId, values);
 
             await connection.commit();
             res.status(mode === 'replace' ? 200 : 201).json({
