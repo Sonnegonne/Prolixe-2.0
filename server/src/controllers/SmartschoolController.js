@@ -14,6 +14,8 @@
 const pool = require('../../config/database');
 const {
     buildRows, renderHtml, renderText, contentHash,
+    notifiableKeys, newKeys, parseKeys,
+    todayKey, isInReminderWindow, buildReminder, hiddenHash, toDateKey,
 } = require('../services/smartschoolJournal');
 
 class SmartschoolController {
@@ -76,6 +78,42 @@ class SmartschoolController {
         `);
 
         await SmartschoolController.migrateToSubjectKey(connection);
+
+        // Les assignations (interros et prépas) présentes dans la dernière
+        // publication : c'est la seule façon de savoir qu'une interro vient
+        // d'apparaître, et donc qu'il faut prévenir les élèves. NULL = inconnu.
+        const [colAssign] = await connection.execute(`
+            SELECT 1 FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'SMARTSCHOOL_TARGETS' AND COLUMN_NAME = 'published_assignments'
+        `);
+        if (colAssign.length === 0) {
+            await connection.query(
+                'ALTER TABLE SMARTSCHOOL_TARGETS ADD COLUMN published_assignments TEXT DEFAULT NULL'
+            );
+            console.log('   ↳ colonne SMARTSCHOOL_TARGETS.published_assignments ajoutée');
+        }
+
+        // Une actualité de rappel par interro, visible de J-2 à J. `visible`
+        // dit ce qui est réellement en ligne ; `title` et `html` sont gardés
+        // pour pouvoir retirer le rappel d'une interro supprimée entre-temps.
+        await connection.execute(`
+            CREATE TABLE IF NOT EXISTS SMARTSCHOOL_REMINDERS (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                target_id INT NOT NULL,
+                assignment_id INT NOT NULL,
+                news_id VARCHAR(32) DEFAULT NULL,
+                due_date DATE DEFAULT NULL,
+                title VARCHAR(255) DEFAULT NULL,
+                html TEXT DEFAULT NULL,
+                visible TINYINT(1) NOT NULL DEFAULT 0,
+                published_hash CHAR(64) DEFAULT NULL,
+                published_at DATETIME DEFAULT NULL,
+                last_error TEXT DEFAULT NULL,
+                last_error_at DATETIME DEFAULT NULL,
+                UNIQUE KEY uniq_reminder (target_id, assignment_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
 
         // MySQL ne connaît pas ADD COLUMN IF NOT EXISTS : on regarde d'abord.
         for (const [table, column] of [
@@ -186,7 +224,7 @@ class SmartschoolController {
         // sont rattachées à tous les cours de la classe : mieux vaut une ligne
         // en double qu'un devoir qui disparaît sans que personne le voie.
         const [assignments] = await db.execute(`
-            SELECT a.due_date, a.type, a.subject, a.description, a.exclude_from_smartschool
+            SELECT a.id, a.due_date, a.type, a.subject, a.description, a.exclude_from_smartschool
             FROM ASSIGNMENTS a
             LEFT JOIN SCHEDULE_SLOTS ss ON a.schedule_slot_id = ss.id
             WHERE a.journal_id = ? AND a.class_id = ?
@@ -199,6 +237,8 @@ class SmartschoolController {
 
         return {
             rows,
+            assignments,
+            assignmentKeys: notifiableKeys(assignments),
             html: renderHtml(rows, { updatedAt }),
             text: renderText(rows, { updatedAt }),
             hash: contentHash(target.title, rows),
@@ -411,7 +451,9 @@ class SmartschoolController {
                 }
 
                 const target = rows[0];
-                const content = await SmartschoolController.buildContent(db, target);
+                // Les assignations brutes n'ont rien à faire dans un aperçu.
+                const { assignments, assignmentKeys, ...content } =
+                    await SmartschoolController.buildContent(db, target);
                 return {
                     target_id: target.id,
                     class_name: target.class_name,
@@ -447,7 +489,25 @@ class SmartschoolController {
                 const out = [];
                 for (const target of targets) {
                     const content = await SmartschoolController.buildContent(db, target);
-                    if (content.hash === target.published_hash) continue;
+                    const publiees = parseKeys(target.published_assignments);
+
+                    if (content.hash === target.published_hash) {
+                        // En ligne et à jour, mais publié avant que l'on retienne
+                        // les assignations : ce qui est en ligne est exactement
+                        // ce qu'on a sous les yeux, on peut donc le retenir.
+                        if (publiees === null) {
+                            await db.execute(
+                                'UPDATE SMARTSCHOOL_TARGETS SET published_assignments = ? WHERE id = ?',
+                                [JSON.stringify(content.assignmentKeys), target.id]
+                            );
+                        }
+                        continue;
+                    }
+
+                    const nouvelles = newKeys(content.assignmentKeys, publiees);
+                    const libelles = content.assignments
+                        .filter((a) => nouvelles.includes(String(a.id)))
+                        .map((a) => `${a.type}${a.subject ? ` ${a.subject}` : ''}`);
 
                     out.push({
                         target_id: target.id,
@@ -461,6 +521,11 @@ class SmartschoolController {
                         html: content.html,
                         text: content.text,
                         row_count: content.rows.length,
+                        // Prévenir les élèves seulement si une interro ou une
+                        // prépa vient d'apparaître — pas pour une retouche.
+                        notify: nouvelles.length > 0,
+                        new_assignments: libelles,
+                        assignment_keys: content.assignmentKeys,
                     });
                 }
                 return out;
@@ -477,7 +542,11 @@ class SmartschoolController {
      * journal a changé entre-temps, le cours repassera simplement en attente.
      */
     static async markPublished(req, res) {
-        const { target_id, hash, news_id } = req.body;
+        const { target_id, hash, news_id, assignment_keys } = req.body;
+        // Absent (extension antérieure) : on garde ce qui était retenu.
+        const keys = Array.isArray(assignment_keys)
+            ? JSON.stringify(assignment_keys.map(String))
+            : null;
 
         if (!target_id || !hash) {
             return res.status(400).json({ success: false, message: 'target_id et hash sont requis.' });
@@ -491,10 +560,11 @@ class SmartschoolController {
                     SET t.published_hash = ?,
                         t.published_at = NOW(),
                         t.news_id = COALESCE(?, t.news_id),
+                        t.published_assignments = COALESCE(?, t.published_assignments),
                         t.last_error = NULL,
                         t.last_error_at = NULL
                     WHERE t.id = ? AND j.user_id = ?
-                `, [hash, news_id ? String(news_id) : null, target_id, req.user.id]);
+                `, [hash, news_id ? String(news_id) : null, keys, target_id, req.user.id]);
 
                 if (result.affectedRows === 0) {
                     const error = new Error('Liaison introuvable.');
@@ -533,6 +603,193 @@ class SmartschoolController {
             res.json({ success: true });
         } catch (err) {
             SmartschoolController.handleError(res, err, 'Erreur enregistrement de l\'échec.');
+        }
+    }
+
+    // =========================================================
+    // --- RAPPELS D'INTERRO (une actualité par interro, de J-2 à J) ---
+    // =========================================================
+
+    /**
+     * Les rappels à poser ou à retirer.
+     *
+     * Un rappel n'est créé qu'une fois entré dans sa fenêtre (J-2 à J), et
+     * c'est ce moment-là qui notifie : la notification accompagne l'apparition.
+     * Il disparaît seul après le jour J (date de fin de visibilité) ; on ne le
+     * retire à la main que si l'interro est supprimée, exclue ou déplacée hors
+     * de la fenêtre avant d'avoir eu lieu.
+     */
+    static async pendingReminders(req, res) {
+        try {
+            const items = await SmartschoolController.withConnection(async (db) => {
+                const targets = await SmartschoolController.listTargets(
+                    db, req.user.id, { enabledOnly: true }
+                );
+                const today = todayKey();
+                const out = [];
+
+                for (const target of targets) {
+                    const [interros] = await db.execute(`
+                        SELECT a.id, a.due_date, a.type, a.subject, a.description
+                        FROM ASSIGNMENTS a
+                        LEFT JOIN SCHEDULE_SLOTS ss ON a.schedule_slot_id = ss.id
+                        WHERE a.journal_id = ? AND a.class_id = ?
+                          AND (ss.subject_id = ? OR a.schedule_slot_id IS NULL)
+                          AND a.type = 'Interro'
+                          AND COALESCE(a.exclude_from_smartschool, 0) = 0
+                    `, [target.journal_id, target.class_id, target.subject_id]);
+
+                    const [lignes] = await db.execute(
+                        'SELECT * FROM SMARTSCHOOL_REMINDERS WHERE target_id = ?',
+                        [target.id]
+                    );
+                    const parInterro = new Map(lignes.map((r) => [String(r.assignment_id), r]));
+
+                    const base = {
+                        target_id: target.id,
+                        class_name: target.class_name,
+                        subject_name: target.subject_name,
+                        course_id: target.course_id,
+                        ss_id: target.ss_id,
+                    };
+
+                    const attendus = new Set();
+                    for (const a of interros) {
+                        if (!isInReminderWindow(a.due_date, today)) continue;
+                        attendus.add(String(a.id));
+
+                        const rappel = buildReminder(a);
+                        const ligne = parInterro.get(String(a.id));
+                        if (ligne && ligne.published_hash === rappel.hash) continue;
+
+                        out.push({
+                            ...base,
+                            assignment_id: a.id,
+                            news_id: ligne?.news_id || null,
+                            due_date: toDateKey(a.due_date),
+                            title: rappel.title,
+                            html: rappel.html,
+                            visible: true,
+                            visible_from: rappel.visibleFrom,
+                            visible_till: rappel.visibleTill,
+                            hash: rappel.hash,
+                            // Notifier à l'apparition, pas à chaque retouche.
+                            notify: !(ligne && ligne.visible && ligne.news_id),
+                        });
+                    }
+
+                    // Interro supprimée, exclue ou déplacée avant d'avoir eu lieu :
+                    // son rappel ne doit pas rester en ligne.
+                    for (const ligne of lignes) {
+                        if (attendus.has(String(ligne.assignment_id))) continue;
+                        if (!ligne.visible || !ligne.news_id) continue;
+                        if (toDateKey(ligne.due_date) < today) continue;   // expiré tout seul
+
+                        out.push({
+                            ...base,
+                            assignment_id: ligne.assignment_id,
+                            news_id: ligne.news_id,
+                            due_date: toDateKey(ligne.due_date),
+                            title: ligne.title,
+                            html: ligne.html,
+                            visible: false,
+                            visible_from: null,
+                            visible_till: null,
+                            hash: hiddenHash(ligne.title, ligne.html),
+                            notify: false,
+                        });
+                    }
+                }
+                return out;
+            });
+
+            res.json({ success: true, data: items });
+        } catch (error) {
+            SmartschoolController.handleError(res, error, 'Erreur lecture des rappels d\'interro.');
+        }
+    }
+
+    /** Vérifie que la liaison appartient à l'utilisateur connecté. */
+    static async assertOwnsTarget(db, targetId, userId) {
+        const [rows] = await db.execute(`
+            SELECT t.id FROM SMARTSCHOOL_TARGETS t
+            JOIN JOURNALS j ON t.journal_id = j.id
+            WHERE t.id = ? AND j.user_id = ?
+        `, [targetId, userId]);
+        if (rows.length === 0) {
+            const error = new Error('Liaison introuvable.');
+            error.status = 404;
+            throw error;
+        }
+    }
+
+    /** L'extension confirme la pose (ou le retrait) d'un rappel. */
+    static async markReminderPublished(req, res) {
+        const {
+            target_id, assignment_id, hash, news_id, due_date, title, html, visible,
+        } = req.body;
+
+        if (!target_id || !assignment_id || !hash) {
+            return res.status(400).json({
+                success: false, message: 'target_id, assignment_id et hash sont requis.',
+            });
+        }
+
+        try {
+            await SmartschoolController.withConnection(async (db) => {
+                await SmartschoolController.assertOwnsTarget(db, target_id, req.user.id);
+                await db.execute(`
+                    INSERT INTO SMARTSCHOOL_REMINDERS
+                        (target_id, assignment_id, news_id, due_date, title, html, visible,
+                         published_hash, published_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                    ON DUPLICATE KEY UPDATE
+                        news_id = COALESCE(VALUES(news_id), news_id),
+                        due_date = VALUES(due_date),
+                        title = VALUES(title),
+                        html = VALUES(html),
+                        visible = VALUES(visible),
+                        published_hash = VALUES(published_hash),
+                        published_at = NOW(),
+                        last_error = NULL,
+                        last_error_at = NULL
+                `, [
+                    target_id, assignment_id, news_id ? String(news_id) : null,
+                    due_date || null, String(title || '').slice(0, 255), html ?? null,
+                    visible ? 1 : 0, hash,
+                ]);
+            });
+            res.json({ success: true });
+        } catch (error) {
+            SmartschoolController.handleError(
+                res, error, 'Erreur enregistrement du rappel.', error.status || 500
+            );
+        }
+    }
+
+    /** L'extension signale l'échec d'un rappel. */
+    static async markReminderFailed(req, res) {
+        const { target_id, assignment_id, error: message } = req.body;
+        if (!target_id || !assignment_id) {
+            return res.status(400).json({
+                success: false, message: 'target_id et assignment_id sont requis.',
+            });
+        }
+
+        try {
+            await SmartschoolController.withConnection(async (db) => {
+                await SmartschoolController.assertOwnsTarget(db, target_id, req.user.id);
+                await db.execute(`
+                    INSERT INTO SMARTSCHOOL_REMINDERS (target_id, assignment_id, last_error, last_error_at)
+                    VALUES (?, ?, ?, NOW())
+                    ON DUPLICATE KEY UPDATE last_error = VALUES(last_error), last_error_at = NOW()
+                `, [target_id, assignment_id, String(message || 'Erreur inconnue').slice(0, 1000)]);
+            });
+            res.json({ success: true });
+        } catch (err) {
+            SmartschoolController.handleError(
+                res, err, 'Erreur enregistrement de l\'échec du rappel.', err.status || 500
+            );
         }
     }
 

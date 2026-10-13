@@ -4,6 +4,8 @@
 const assert = require('assert');
 const {
     buildRows, renderHtml, renderText, contentHash, readDoneWork, toShortDate,
+    notifiableKeys, newKeys, parseKeys, todayKey,
+    reminderWindow, isInReminderWindow, buildReminder, hiddenHash,
 } = require('../src/services/smartschoolJournal');
 
 let passed = 0;
@@ -263,6 +265,86 @@ test('l\'horodatage du rendu n\'entre PAS dans l\'empreinte', () => {
         renderHtml(rows, { updatedAt: new Date('2026-09-13') }),
         renderHtml(rows, { updatedAt: new Date('2026-09-14') }),
     );
+});
+
+// --- Notification : seulement une interro ou une prépa ajoutée ------------
+
+const aNotifier = [
+    { id: 1, type: 'Interro', due_date: '2026-09-26', subject: 'HDW 1' },
+    { id: 2, type: 'Devoir', due_date: '2026-09-25', subject: 'Prépa HD 2' },
+    { id: 3, type: 'Projet', due_date: '2026-10-10', subject: 'Site web' },
+    { id: 4, type: 'Interro', due_date: '2026-09-30', exclude_from_smartschool: 1 },
+];
+
+test('seules les interros et prépas publiées comptent pour notifier', () => {
+    assert.deepStrictEqual(notifiableKeys(aNotifier), ['1', '2']);
+});
+
+test('une interro ajoutée est nouvelle', () => {
+    assert.deepStrictEqual(newKeys(['1', '2', '5'], ['1', '2']), ['5']);
+});
+
+test('une retouche sans ajout ne notifie pas', () => {
+    assert.deepStrictEqual(newKeys(['1', '2'], ['1', '2']), []);
+    assert.deepStrictEqual(newKeys(['1'], ['1', '2']), []);   // suppression
+});
+
+test('publication antérieure inconnue : personne n\'est prévenu', () => {
+    assert.deepStrictEqual(newKeys(['1', '2'], null), []);
+});
+
+test('la colonne abîmée ne plante pas', () => {
+    assert.strictEqual(parseKeys(null), null);
+    assert.strictEqual(parseKeys('pas du json'), null);
+    assert.deepStrictEqual(parseKeys('[1,"2"]'), ['1', '2']);
+    assert.deepStrictEqual(parseKeys('[]'), []);
+});
+
+// --- Rappel d'interro : actualité séparée, de J-2 à J ----------------------
+
+test('la fenêtre du rappel va de J-2 au jour J', () => {
+    assert.deepStrictEqual(reminderWindow('2026-09-26'), { from: '2026-09-24', till: '2026-09-26' });
+    // passage de mois
+    assert.deepStrictEqual(reminderWindow('2026-10-01'), { from: '2026-09-29', till: '2026-10-01' });
+});
+
+test('le rappel n\'existe qu\'entre J-2 et J', () => {
+    assert.strictEqual(isInReminderWindow('2026-09-26', '2026-09-23'), false);
+    assert.strictEqual(isInReminderWindow('2026-09-26', '2026-09-24'), true);
+    assert.strictEqual(isInReminderWindow('2026-09-26', '2026-09-26'), true);
+    assert.strictEqual(isInReminderWindow('2026-09-26', '2026-09-27'), false);
+    assert.strictEqual(isInReminderWindow(null, '2026-09-26'), false);
+});
+
+test('la date du jour est celle de Bruxelles, pas celle du serveur', () => {
+    // 23 h 30 UTC le 24 = 1 h 30 le 25 à Waremme (heure d'été)
+    assert.strictEqual(todayKey(new Date('2026-09-24T23:30:00Z')), '2026-09-25');
+});
+
+test('le rappel nomme l\'interro, sa date et le rappel', () => {
+    const r = buildReminder({ id: 1, due_date: '2026-09-26', subject: 'HDW 1', description: 'Chapitre 2 <cartes mères>' });
+    assert.strictEqual(r.title, 'Interro — HDW 1 — samedi 26/09');
+    assert.ok(r.html.includes('HDW 1'));
+    assert.ok(r.html.includes('samedi 26/09'));
+    assert.ok(r.html.includes('Rappel'));
+    assert.ok(r.html.includes('&lt;cartes mères&gt;'), 'le texte est échappé');
+    assert.strictEqual(r.visibleFrom, '2026-09-24');
+    assert.strictEqual(r.visibleTill, '2026-09-26');
+});
+
+test('sans description, le rappel reste lisible', () => {
+    const r = buildReminder({ id: 1, due_date: '2026-09-28', subject: '', description: '' });
+    assert.strictEqual(r.title, 'Interro — lundi 28/09');
+    assert.ok(r.html.includes('revoir la matière'));
+});
+
+test('l\'empreinte du rappel suit son contenu, et le retrait en diffère', () => {
+    const a = buildReminder({ id: 1, due_date: '2026-09-26', subject: 'HDW 1' });
+    const b = buildReminder({ id: 1, due_date: '2026-09-26', subject: 'HDW 1' });
+    const c = buildReminder({ id: 1, due_date: '2026-09-27', subject: 'HDW 1' });
+    assert.strictEqual(a.hash, b.hash);
+    assert.notStrictEqual(a.hash, c.hash);
+    assert.notStrictEqual(a.hash, hiddenHash(a.title, a.html));
 });
 
 console.log(`\n${passed} essais passés${process.exitCode ? ' — avec des échecs' : ''}`);

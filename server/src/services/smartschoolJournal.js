@@ -260,6 +260,144 @@ function contentHash(title, rows) {
         .digest('hex');
 }
 
+// =========================================================
+// --- NOTIFICATION : seulement pour un devoir ou une interro ajoutés ---
+// =========================================================
+
+// Les notifications sont coupées par défaut : le journal change presque tous
+// les jours, et une notification quotidienne par cours ferait couper les
+// notifications par toute la classe. Deux choses méritent pourtant d'atteindre
+// les élèves : une interro ou une prépa qui apparaît. Rien d'autre — ni une
+// correction de texte, ni un projet, ni le travail effectué.
+const TYPES_NOTIFIES = new Set(['INTERRO', 'DEVOIR']);
+
+/** Identifiants (texte) des assignations dont l'apparition doit prévenir les élèves. */
+function notifiableKeys(assignments = []) {
+    return assignments
+        .filter((a) => !a.exclude_from_smartschool && a.id != null && toDateKey(a.due_date))
+        .filter((a) => TYPES_NOTIFIES.has(String(a.type || '').trim().toUpperCase()))
+        .map((a) => String(a.id))
+        .sort();
+}
+
+/**
+ * Ce qui est nouveau depuis la dernière publication.
+ *
+ * `published` à `null` veut dire : on ne sait pas ce qui a été publié (liaison
+ * antérieure à cette règle). Dans le doute, personne n'est prévenu — tout
+ * annoncer comme « nouveau » enverrait une notification pour chaque interro de
+ * l'année au premier passage.
+ */
+function newKeys(current = [], published = null) {
+    if (!Array.isArray(published)) return [];
+    const deja = new Set(published.map(String));
+    return current.filter((k) => !deja.has(String(k)));
+}
+
+/** Lit la colonne `published_assignments` sans jamais planter sur un contenu abîmé. */
+function parseKeys(raw) {
+    if (raw === null || raw === undefined || raw === '') return null;
+    try {
+        const valeur = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        return Array.isArray(valeur) ? valeur.map(String) : null;
+    } catch {
+        return null;
+    }
+}
+
+// =========================================================
+// --- RAPPEL D'INTERRO : une actualité à part, de J-2 à J ---
+// =========================================================
+
+/** Jours avant l'interro où le rappel apparaît (48 h). */
+const REMINDER_DAYS_BEFORE = 2;
+
+const TIMEZONE = 'Europe/Brussels';
+
+/** Date du jour à Waremme, et non celle du serveur (le VPS vit en UTC). */
+const todayKey = (now = new Date()) => new Intl.DateTimeFormat('en-CA', {
+    timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+}).format(now);
+
+/** '2026-09-26' + (-2) -> '2026-09-24', sans passer par une heure locale. */
+const addDays = (dateKey, days) => {
+    const [y, m, d] = dateKey.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+};
+
+/** Fenêtre de visibilité du rappel : de J-2 au jour J inclus. */
+function reminderWindow(dueDate) {
+    const till = toDateKey(dueDate);
+    return { from: till ? addDays(till, -REMINDER_DAYS_BEFORE) : '', till };
+}
+
+/** Le rappel doit-il être visible aujourd'hui ? */
+function isInReminderWindow(dueDate, today = todayKey()) {
+    const { from, till } = reminderWindow(dueDate);
+    return Boolean(till) && today >= from && today <= till;
+}
+
+const JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+
+/** '2026-09-26' -> 'samedi 26/09' */
+const longDate = (dateKey) => {
+    const [y, m, d] = dateKey.split('-').map(Number);
+    const jour = JOURS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+    return `${jour} ${toShortDate(dateKey)}`;
+};
+
+/**
+ * Contenu de l'actualité de rappel d'une interro.
+ *
+ * Le nom de l'interro est la matière de l'assignation (`subject`, « HDW 1 »),
+ * comme dans le tableau du journal ; la description, quand il y en a une,
+ * précise le rappel.
+ *
+ * @returns {{title, html, visibleFrom, visibleTill, hash}}
+ */
+function buildReminder(assignment) {
+    const dueDate = toDateKey(assignment.due_date);
+    const nom = cleanDescription(assignment.subject).split('\n').join(' — ');
+    const detail = cleanDescription(assignment.description);
+    const quand = longDate(dueDate);
+    const { from, till } = reminderWindow(dueDate);
+
+    const title = `Interro${nom ? ` — ${nom}` : ''} — ${quand}`;
+
+    const lignes = [
+        `<p><strong>Interrogation${nom ? ` : ${escapeHtml(nom)}` : ''}</strong></p>`,
+        `<p><strong>Date :</strong> ${escapeHtml(quand)}</p>`,
+        `<p><strong>Rappel :</strong> ${detail
+            ? multiline(detail)
+            : 'pense à revoir la matière avant l\'interro.'}</p>`,
+    ];
+
+    // Même rose que les lignes cotées du tableau du journal : les élèves
+    // reconnaissent une interro à sa couleur.
+    const html = `<table style="border-collapse: collapse; width: 99.046%; border-width: 1px; background-color: ${GRADED_BG};" border="1">
+  <tbody>
+    <tr>
+      <td style="padding: 8px;">
+      ${lignes.join('\n      ')}
+      </td>
+    </tr>
+  </tbody>
+</table>`;
+
+    const hash = crypto
+        .createHash('sha256')
+        .update(JSON.stringify({ title, html, from, till, visible: true }))
+        .digest('hex');
+
+    return { title, html, visibleFrom: from, visibleTill: till, hash };
+}
+
+/** Empreinte d'un rappel retiré : il suffit qu'elle diffère de celle d'un rappel visible. */
+const hiddenHash = (title, html) => crypto
+    .createHash('sha256')
+    .update(JSON.stringify({ title, html, visible: false }))
+    .digest('hex');
+
 module.exports = {
     buildRows,
     renderHtml,
@@ -268,4 +406,12 @@ module.exports = {
     toDateKey,
     toShortDate,
     readDoneWork,
+    notifiableKeys,
+    newKeys,
+    parseKeys,
+    todayKey,
+    reminderWindow,
+    isInReminderWindow,
+    buildReminder,
+    hiddenHash,
 };
