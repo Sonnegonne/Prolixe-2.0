@@ -16,6 +16,7 @@ const {
     buildRows, renderHtml, renderText, contentHash,
     notifiableKeys, newKeys, parseKeys,
     todayKey, isInReminderWindow, buildReminder, hiddenHash, toDateKey,
+    REMINDER_TYPES,
 } = require('../services/smartschoolJournal');
 
 class SmartschoolController {
@@ -132,6 +133,37 @@ class SmartschoolController {
                 console.log(`   ↳ colonne ${table}.${column} ajoutée`);
             }
         }
+
+        await SmartschoolController.migrateDevoirCote(connection);
+    }
+
+    /**
+     * Ajoute « Devoir coté » à l'ENUM de ASSIGNMENTS.type (13 octobre 2026).
+     * La liste existante est relue puis complétée, jamais réécrite de mémoire :
+     * une valeur oubliée ici rendrait illisibles les lignes qui la portent.
+     */
+    static async migrateDevoirCote(connection) {
+        const [cols] = await connection.execute(`
+            SELECT COLUMN_TYPE, COLUMN_DEFAULT, IS_NULLABLE FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ASSIGNMENTS' AND COLUMN_NAME = 'type'
+        `);
+        if (cols.length === 0) return;
+        const { COLUMN_TYPE: columnType, COLUMN_DEFAULT: defaut, IS_NULLABLE: nullable } = cols[0];
+        if (!/^enum\(/i.test(columnType) || columnType.includes("'Devoir coté'")) return;
+
+        const valeurs = [...columnType.matchAll(/'((?:[^']|'')*)'/g)].map((m) => m[1].replace(/''/g, "'"));
+        const i = valeurs.indexOf('Devoir');
+        valeurs.splice(i >= 0 ? i + 1 : valeurs.length, 0, 'Devoir coté');
+
+        const liste = valeurs.map((v) => connection.escape(v)).join(', ');
+        const clauseDefaut = defaut != null
+            ? ` DEFAULT ${connection.escape(String(defaut).replace(/^'|'$/g, ''))}`
+            : '';
+        await connection.query(
+            `ALTER TABLE ASSIGNMENTS MODIFY COLUMN type ENUM(${liste})`
+            + `${nullable === 'YES' ? ' NULL' : ' NOT NULL'}${clauseDefaut}`
+        );
+        console.log('   ↳ type « Devoir coté » ajouté à ASSIGNMENTS.type');
     }
 
     /**
@@ -635,9 +667,9 @@ class SmartschoolController {
                         LEFT JOIN SCHEDULE_SLOTS ss ON a.schedule_slot_id = ss.id
                         WHERE a.journal_id = ? AND a.class_id = ?
                           AND (ss.subject_id = ? OR a.schedule_slot_id IS NULL)
-                          AND a.type = 'Interro'
+                          AND a.type IN (${REMINDER_TYPES.map(() => '?').join(', ')})
                           AND COALESCE(a.exclude_from_smartschool, 0) = 0
-                    `, [target.journal_id, target.class_id, target.subject_id]);
+                    `, [target.journal_id, target.class_id, target.subject_id, ...REMINDER_TYPES]);
 
                     const [lignes] = await db.execute(
                         'SELECT * FROM SMARTSCHOOL_REMINDERS WHERE target_id = ?',

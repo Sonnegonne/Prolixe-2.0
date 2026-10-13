@@ -75,9 +75,11 @@ const readDoneWork = (raw) => {
 // Ce que Prolixe appelle « Devoir », l'établissement l'appelle « Prépa ».
 // Le renommage vit ici, au seul endroit qui parle aux élèves : le journal, lui,
 // garde ses propres mots, et rien dans la base n'est réécrit.
+// « Devoir coté » est un autre type : il garde son nom.
 const TYPES_PUBLIES = { DEVOIR: 'PRÉPA' };
+const DEVOIR_COTE = 'DEVOIR COTÉ';
 
-/** 'Interro' -> 'INTERRO', 'Devoir' -> 'PRÉPA' */
+/** 'Interro' -> 'INTERRO', 'Devoir' -> 'PRÉPA', 'Devoir coté' -> 'DEVOIR COTÉ' */
 const typeLabel = (type) => {
     const brut = (type || 'Évaluation').trim().toUpperCase();
     return TYPES_PUBLIES[brut] || brut;
@@ -188,11 +190,18 @@ const stampOf = (date) => toDateKey(date).split('-').reverse().join('/');
 // jour où elle se met à jour toute seule.
 const TABLE_BG = 'rgb(251, 238, 184)';   // jaune
 const GRADED_BG = 'rgb(248, 202, 198)';  // rose
+const DEVOIR_COTE_BG = 'rgb(221, 200, 240)';  // mauve
 const COL_WIDTHS = ['33.4663%', '23.8235%', '42.6837%'];
 
 // Ce qui est coté prend la ligne rose. Tout le reste garde le fond du tableau.
 const GRADED_TYPES = new Set(['INTERRO', 'ÉVALUATION', 'EVALUATION', 'EXAMEN', 'CONTRÔLE', 'CONTROLE']);
 const isGraded = (type) => GRADED_TYPES.has(String(type || '').toUpperCase());
+
+// Un devoir coté a sa propre couleur, pour ne pas le confondre avec une interro.
+const rowBackground = (type) => {
+    if (String(type || '').toUpperCase() === DEVOIR_COTE) return DEVOIR_COTE_BG;
+    return isGraded(type) ? GRADED_BG : null;
+};
 
 /**
  * Rend le tableau en HTML. Styles en ligne uniquement : l'éditeur de
@@ -213,7 +222,8 @@ function renderHtml(rows, { updatedAt = new Date() } = {}) {
     </tr>`;
 
     const body = rows.map((r) => {
-        const rowStyle = isGraded(r.type) ? ` style="background-color: ${GRADED_BG};"` : '';
+        const bg = rowBackground(r.type);
+        const rowStyle = bg ? ` style="background-color: ${bg};"` : '';
         return `
     <tr${rowStyle}>
       <th ${cell()}><strong>${escapeHtml(toShortDate(r.date))}</strong></th>
@@ -261,15 +271,15 @@ function contentHash(title, rows) {
 }
 
 // =========================================================
-// --- NOTIFICATION : seulement pour un devoir ou une interro ajoutés ---
+// --- NOTIFICATION : seulement pour une prépa, un devoir coté ou une interro ajoutés ---
 // =========================================================
 
 // Les notifications sont coupées par défaut : le journal change presque tous
 // les jours, et une notification quotidienne par cours ferait couper les
 // notifications par toute la classe. Deux choses méritent pourtant d'atteindre
-// les élèves : une interro ou une prépa qui apparaît. Rien d'autre — ni une
-// correction de texte, ni un projet, ni le travail effectué.
-const TYPES_NOTIFIES = new Set(['INTERRO', 'DEVOIR']);
+// les élèves : une interro, une prépa ou un devoir coté qui apparaît. Rien
+// d'autre — ni une correction de texte, ni un projet, ni le travail effectué.
+const TYPES_NOTIFIES = new Set(['INTERRO', 'DEVOIR', DEVOIR_COTE]);
 
 /** Identifiants (texte) des assignations dont l'apparition doit prévenir les élèves. */
 function notifiableKeys(assignments = []) {
@@ -306,8 +316,11 @@ function parseKeys(raw) {
 }
 
 // =========================================================
-// --- RAPPEL D'INTERRO : une actualité à part, de J-2 à J ---
+// --- RAPPEL D'INTERRO OU DE DEVOIR COTÉ : une actualité à part, de J-2 à J ---
 // =========================================================
+
+/** Types d'assignation (tels que Prolixe les enregistre) qui ont un rappel. */
+const REMINDER_TYPES = ['Interro', 'Devoir coté'];
 
 /** Jours avant l'interro où le rappel apparaît (48 h). */
 const REMINDER_DAYS_BEFORE = 2;
@@ -346,8 +359,25 @@ const longDate = (dateKey) => {
     return `${jour} ${toShortDate(dateKey)}`;
 };
 
+// Ce qui change d'un rappel à l'autre. L'interro garde mot pour mot son
+// rappel d'origine : son empreinte ne bouge pas, rien n'est republié.
+const REMINDER_STYLES = {
+    INTERRO: {
+        titre: 'Interro',
+        intitule: 'Interrogation',
+        defaut: 'pense à revoir la matière avant l\'interro.',
+        bg: GRADED_BG,
+    },
+    [DEVOIR_COTE]: {
+        titre: 'Devoir coté',
+        intitule: 'Devoir coté',
+        defaut: 'pense à terminer ton devoir et à le remettre à temps.',
+        bg: DEVOIR_COTE_BG,
+    },
+};
+
 /**
- * Contenu de l'actualité de rappel d'une interro.
+ * Contenu de l'actualité de rappel d'une interro ou d'un devoir coté.
  *
  * Le nom de l'interro est la matière de l'assignation (`subject`, « HDW 1 »),
  * comme dans le tableau du journal ; la description, quand il y en a une,
@@ -361,20 +391,21 @@ function buildReminder(assignment) {
     const detail = cleanDescription(assignment.description);
     const quand = longDate(dueDate);
     const { from, till } = reminderWindow(dueDate);
+    const style = REMINDER_STYLES[typeLabel(assignment.type)] || REMINDER_STYLES.INTERRO;
 
-    const title = `Interro${nom ? ` — ${nom}` : ''} — ${quand}`;
+    const title = `${style.titre}${nom ? ` — ${nom}` : ''} — ${quand}`;
 
     const lignes = [
-        `<p><strong>Interrogation${nom ? ` : ${escapeHtml(nom)}` : ''}</strong></p>`,
+        `<p><strong>${style.intitule}${nom ? ` : ${escapeHtml(nom)}` : ''}</strong></p>`,
         `<p><strong>Date :</strong> ${escapeHtml(quand)}</p>`,
         `<p><strong>Rappel :</strong> ${detail
             ? multiline(detail)
-            : 'pense à revoir la matière avant l\'interro.'}</p>`,
+            : style.defaut}</p>`,
     ];
 
-    // Même rose que les lignes cotées du tableau du journal : les élèves
-    // reconnaissent une interro à sa couleur.
-    const html = `<table style="border-collapse: collapse; width: 99.046%; border-width: 1px; background-color: ${GRADED_BG};" border="1">
+    // Même couleur que la ligne du tableau du journal : rose pour une interro,
+    // mauve pour un devoir coté — les élèves les reconnaissent à leur couleur.
+    const html = `<table style="border-collapse: collapse; width: 99.046%; border-width: 1px; background-color: ${style.bg};" border="1">
   <tbody>
     <tr>
       <td style="padding: 8px;">
@@ -414,4 +445,5 @@ module.exports = {
     isInReminderWindow,
     buildReminder,
     hiddenHash,
+    REMINDER_TYPES,
 };

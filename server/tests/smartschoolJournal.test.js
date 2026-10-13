@@ -347,4 +347,42 @@ test('l\'empreinte du rappel suit son contenu, et le retrait en diffère', () =>
     assert.notStrictEqual(a.hash, hiddenHash(a.title, a.html));
 });
 
+// --- Devoir coté (13 octobre 2026) -------------------------------------------
+
+test('un devoir coté sort « DEVOIR COTÉ » sur une ligne mauve, la prépa reste « PRÉPA »', () => {
+    const rows = buildRows([], [
+        { id: 1, due_date: '2026-10-15', type: 'Devoir coté', subject: 'Tableur' },
+        { id: 2, due_date: '2026-10-16', type: 'Devoir', subject: 'Chap. 3' },
+    ]);
+    assert.deepStrictEqual(rows.map((r) => r.type), ['DEVOIR COTÉ', 'PRÉPA']);
+    const html = renderHtml(rows, { updatedAt: new Date('2026-10-13') });
+    assert.ok(html.includes('<tr style="background-color: rgb(221, 200, 240);">'), 'ligne mauve');
+    assert.ok(!html.includes('rgb(248, 202, 198)'), 'ni rose pour le devoir coté, ni pour la prépa');
+});
+
+test('un devoir coté prévient les élèves, comme une interro', () => {
+    const keys = notifiableKeys([
+        { id: 7, due_date: '2026-10-15', type: 'Devoir coté' },
+        { id: 8, due_date: '2026-10-15', type: 'Projet' },
+    ]);
+    assert.deepStrictEqual(keys, ['7']);
+});
+
+test('le rappel d\'un devoir coté est mauve et dit « Devoir coté »', () => {
+    const r = buildReminder({ id: 3, type: 'Devoir coté', due_date: '2026-10-15', subject: 'Tableur', description: '' });
+    assert.strictEqual(r.title, 'Devoir coté — Tableur — jeudi 15/10');
+    assert.ok(r.html.includes('background-color: rgb(221, 200, 240);'));
+    assert.ok(r.html.includes('<strong>Devoir coté : Tableur</strong>'));
+    assert.ok(r.html.includes('remettre'));
+    assert.strictEqual(r.visibleFrom, '2026-10-13');
+    assert.strictEqual(r.visibleTill, '2026-10-15');
+});
+
+test('le rappel d\'une interro ne change pas avec ou sans type', () => {
+    const sans = buildReminder({ id: 1, due_date: '2026-09-26', subject: 'HDW 1' });
+    const avec = buildReminder({ id: 1, type: 'Interro', due_date: '2026-09-26', subject: 'HDW 1' });
+    assert.strictEqual(sans.hash, avec.hash);
+    assert.ok(avec.html.includes('rgb(248, 202, 198)'));
+});
+
 console.log(`\n${passed} essais passés${process.exitCode ? ' — avec des échecs' : ''}`);

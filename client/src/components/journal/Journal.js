@@ -265,7 +265,7 @@ const JournalView = ({ sources, isArchived }) => {
         id: null, class_id: '', schedule_slot_id: '', subject: '', type: 'Devoir',
         description: '', due_date: '', is_completed: false, is_corrected: false,
     });
-    const assignmentTypes = ['Interro', 'Devoir', 'Projet', 'Examen', 'Autre'];
+    const assignmentTypes = ['Interro', 'Devoir', 'Devoir coté', 'Projet', 'Examen', 'Autre'];
 
     // --- confirm modal ---
     const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
@@ -1046,10 +1046,18 @@ const JournalView = ({ sources, isArchived }) => {
                 assignmentForm.schedule_slot_id,
                 assignmentForm.subject
             );
+            // Jour sans cours : le cours choisi (ou l'unique cours de la classe)
+            // désigne l'actualité Smartschool où le devoir sera publié.
+            const courseSlotId = targetSlot ? null
+                : (coursesOfClass.find(c => c.slotId === String(assignmentForm.schedule_slot_id))?.slotId
+                    || (coursesOfClass.length === 1 ? coursesOfClass[0].slotId : null));
+            if (!targetSlot && coursesOfClass.length > 1 && !courseSlotId) {
+                return showError('Ce jour-là, la classe n\'a pas cours : choisissez le cours concerné.');
+            }
             const payload = {
                 ...assignmentForm,
                 journal_id: classes.find(c => String(c.id) === String(assignmentForm.class_id))?.journal_id ?? journalId,
-                schedule_slot_id: targetSlot ? (targetSlot.slot_id || targetSlot.id) : null,
+                schedule_slot_id: targetSlot ? (targetSlot.slot_id || targetSlot.id) : courseSlotId,
             };
 
             const response = await JournalService.upsertAssignment(payload);
@@ -1088,6 +1096,10 @@ const JournalView = ({ sources, isArchived }) => {
         } catch (err) { showError(err.message); }
     };
 
+    // Un devoir coté peut tomber un jour sans cours (remise le vendredi, par
+    // exemple) : tous les jours ouvrables lui sont proposés.
+    const anyDayAllowed = assignmentForm.type === 'Devoir coté';
+
     const availableDueDates = useMemo(() => {
         if (!assignmentForm.class_id) return [];
         const dates = [];
@@ -1095,12 +1107,38 @@ const JournalView = ({ sources, isArchived }) => {
             const date = addDays(currentWeekStart, i);
             const dayIdx = date.getDay();
             const hasClass = (slotsByDay[dayIdx] || []).some(s => String(s.class_id) === String(assignmentForm.class_id));
-            if (hasClass && !getHolidayForDate(date)) {
-                dates.push({ value: format(date, 'yyyy-MM-dd'), label: format(date, 'EEEE dd MMMM', { locale: fr }) });
+            if ((hasClass || anyDayAllowed) && !getHolidayForDate(date)) {
+                const label = format(date, 'EEEE dd MMMM', { locale: fr });
+                dates.push({ value: format(date, 'yyyy-MM-dd'), label: hasClass ? label : `${label} (pas de cours)` });
             }
         }
+        // En modification, l'échéance déjà enregistrée reste sélectionnable.
+        if (assignmentForm.due_date && !dates.some(d => d.value === assignmentForm.due_date)) {
+            try {
+                dates.unshift({
+                    value: assignmentForm.due_date,
+                    label: format(parseISO(assignmentForm.due_date), 'EEEE dd MMMM', { locale: fr }),
+                });
+            } catch { /* date illisible : on ne la propose pas */ }
+        }
         return dates;
-    }, [assignmentForm.class_id, currentWeekStart, slotsByDay, getHolidayForDate]);
+    }, [assignmentForm.class_id, assignmentForm.due_date, anyDayAllowed, currentWeekStart, slotsByDay, getHolidayForDate]);
+
+    // Un jour sans cours, le devoir est rattaché à un créneau de la classe pris
+    // un autre jour : il ne sert qu'à dire de quel cours il relève (une classe
+    // peut en avoir deux, donc deux actualités Smartschool). Aucun report dans
+    // le travail prévu n'en découle, ce jour-là n'ayant pas de cours.
+    const coursesOfClass = useMemo(() => {
+        if (!assignmentForm.class_id) return [];
+        const seen = new Map();
+        Object.values(slotsByDay).flat()
+            .filter(s => String(s.class_id) === String(assignmentForm.class_id) && s.slot_id != null)
+            .forEach(s => {
+                const key = String(s.subject_id ?? s.subject_name ?? '');
+                if (!seen.has(key)) seen.set(key, { slotId: String(s.slot_id), name: s.subject_name || 'Cours' });
+            });
+        return [...seen.values()];
+    }, [assignmentForm.class_id, slotsByDay]);
 
     // Créneaux de la classe le jour de l'échéance : c'est l'un d'eux qui portera
     // le report dans le travail prévu.
@@ -1589,6 +1627,21 @@ const JournalView = ({ sources, isArchived }) => {
                                         {availableDueDates.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
                                     </select>
                                 </div>
+                                {assignmentForm.due_date && availableSlotsForDueDate.length === 0 && coursesOfClass.length > 1 && (
+                                    <div className="form-group">
+                                        <label>Cours concerné</label>
+                                        <select
+                                            value={coursesOfClass.some(c => c.slotId === String(assignmentForm.schedule_slot_id)) ? String(assignmentForm.schedule_slot_id) : ''}
+                                            onChange={e => setAssignmentForm({ ...assignmentForm, schedule_slot_id: e.target.value })}
+                                            required
+                                            disabled={isArchived}
+                                        >
+                                            <option value="">Sélectionnez le cours</option>
+                                            {coursesOfClass.map(c => <option key={c.slotId} value={c.slotId}>{c.name}</option>)}
+                                        </select>
+                                        <small className="field-hint">Pas de cours ce jour-là : le devoir est publié dans l'actualité Smartschool de ce cours.</small>
+                                    </div>
+                                )}
                                 {availableSlotsForDueDate.length > 1 && (
                                     <div className="form-group">
                                         <label>Heure de cours concernée</label>
