@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { X, Plus, Save, Copy } from 'lucide-react'; // Ajout de Copy pour l'icône
+import { X, Plus, Save, Copy, ListOrdered, ListChecks } from 'lucide-react';
 import { useJournal } from '../../hooks/useJournal';
 import ClassService from '../../services/ClassService';
 import { getEvaluationTemplates, getEvaluationById } from '../../services/EvaluationService'; // Import des services
@@ -20,6 +20,15 @@ import {
 import SortableCriterion from './SortableCriterion';
 import './EvaluationModal.scss';
 import { useSubjects } from "../../hooks/useSubjects";
+
+// Une interro « sans critères » = une liste de critères nommés Q1, Q2, ...
+const QUESTION_NAME = /^Q\d+$/;
+const newTempId = () => Math.random().toString(36).substr(2, 9);
+const looksLikeQuestions = (criteria) =>
+    criteria.length > 0 && criteria.every(c => QUESTION_NAME.test((c.name || '').trim()));
+const makeQuestion = (n, points) => ({
+    tempId: newTempId(), name: `Q${n}`, section_name: 'Général', max_points: points
+});
 
 const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy }) => {
     const { currentJournal } = useJournal();
@@ -48,6 +57,10 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
     }, [formData.criteria]);
 
     const [customSectionFlags, setCustomSectionFlags] = useState({});
+
+    // 'criteria' = grille détaillée ; 'questions' = juste un nombre de questions + points
+    const [mode, setMode] = useState('criteria');
+    const [defaultPoints, setDefaultPoints] = useState(2);
 
     const sensors = useSensors(
         useSensor(PointerSensor),
@@ -89,6 +102,7 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
             });
             setCustomSectionFlags({ [initTempId]: false });
             setSelectedTemplateId('');
+            setMode('criteria');
         }
     }, [isOpen, evaluation, evaluationToCopy, currentJournal]);
 
@@ -115,6 +129,7 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
             criteria: mappedCriteria
         }));
         setCustomSectionFlags(flags);
+        setMode(looksLikeQuestions(mappedCriteria) ? 'questions' : 'criteria');
     };
 
     // Handler pour le changement de modèle
@@ -188,6 +203,50 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
             return { ...prev, criteria: prev.criteria.filter((_, i) => i !== index) };
         });
     }, []);
+
+    // --- Mode « par questions » ---
+    const switchToQuestions = useCallback(() => {
+        setFormData(prev => {
+            // Le critère vide de départ est remplacé par 5 questions ; sinon on garde
+            // les critères existants (et leurs notes) en nommant Q1.. ceux sans nom.
+            const onlyBlank = prev.criteria.length === 0 ||
+                (prev.criteria.length === 1 && !prev.criteria[0].id && !(prev.criteria[0].name || '').trim());
+            const criteria = onlyBlank
+                ? Array.from({ length: 5 }, (_, i) => makeQuestion(i + 1, defaultPoints))
+                : prev.criteria.map((c, i) => (c.name || '').trim() ? c : { ...c, name: `Q${i + 1}` });
+            return { ...prev, criteria };
+        });
+        setMode('questions');
+    }, [defaultPoints]);
+
+    const setQuestionCount = useCallback((raw) => {
+        const n = Math.max(0, Math.min(100, parseInt(raw, 10) || 0));
+        const cur = formData.criteria;
+        if (n === cur.length) return;
+        if (n < cur.length) {
+            const saved = cur.slice(n).filter(c => c.id).length;
+            if (saved > 0 && !window.confirm(
+                `Supprimer ${cur.length - n} question(s) déjà enregistrée(s) ? Les points déjà encodés pour ces questions seront perdus.`
+            )) return;
+            setFormData(prev => ({ ...prev, criteria: prev.criteria.slice(0, n) }));
+            return;
+        }
+        setFormData(prev => ({
+            ...prev,
+            criteria: [
+                ...prev.criteria,
+                ...Array.from({ length: n - prev.criteria.length },
+                    (_, i) => makeQuestion(prev.criteria.length + i + 1, defaultPoints))
+            ]
+        }));
+    }, [formData.criteria, defaultPoints]);
+
+    const applyPointsToAll = useCallback(() => {
+        setFormData(prev => ({
+            ...prev,
+            criteria: prev.criteria.map(c => ({ ...c, max_points: defaultPoints }))
+        }));
+    }, [defaultPoints]);
 
     const handleSave = useCallback(() => {
         onSave({
@@ -284,6 +343,78 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
                         </div>
                     </div>
 
+                    <div className="mode-switch" role="tablist" aria-label="Type de grille">
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={mode === 'criteria'}
+                            className={mode === 'criteria' ? 'active' : ''}
+                            onClick={() => setMode('criteria')}
+                        >
+                            <ListChecks size={16} /> Par critères
+                        </button>
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={mode === 'questions'}
+                            className={mode === 'questions' ? 'active' : ''}
+                            onClick={() => mode !== 'questions' && switchToQuestions()}
+                        >
+                            <ListOrdered size={16} /> Par questions (sans critères)
+                        </button>
+                    </div>
+
+                    {mode === 'questions' ? (
+                    <div className="criteria-section-editor questions-editor">
+                        <div className="section-header">
+                            <h3>Questions</h3>
+                            <span className="total-badge">Total : {totalMaxScore} pts</span>
+                        </div>
+
+                        <div className="questions-settings">
+                            <div className="form-group">
+                                <label htmlFor="q-count">Nombre de questions</label>
+                                <input
+                                    id="q-count"
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    value={formData.criteria.length}
+                                    onChange={e => setQuestionCount(e.target.value)}
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label htmlFor="q-default">Points par défaut</label>
+                                <input
+                                    id="q-default"
+                                    type="number"
+                                    step="0.25"
+                                    min="0"
+                                    value={defaultPoints}
+                                    onChange={e => setDefaultPoints(e.target.value)}
+                                />
+                            </div>
+                            <button type="button" className="btn-add-crit" onClick={applyPointsToAll}>
+                                Appliquer à toutes
+                            </button>
+                        </div>
+
+                        <div className="questions-grid">
+                            {formData.criteria.map((c, index) => (
+                                <label key={c.tempId} className="question-cell">
+                                    <span>{c.name || `Q${index + 1}`}</span>
+                                    <input
+                                        type="number"
+                                        step="0.25"
+                                        min="0"
+                                        value={c.max_points}
+                                        onChange={e => updateCriterion(index, 'max_points', e.target.value)}
+                                    />
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                    ) : (
                     <div className="criteria-section-editor">
                         <div className="section-header">
                             <h3>Structure des critères</h3>
@@ -312,6 +443,7 @@ const EvaluationModal = ({ isOpen, onClose, onSave, evaluation, evaluationToCopy
                             </SortableContext>
                         </DndContext>
                     </div>
+                    )}
                 </div>
 
                 <div className="modal-footer">

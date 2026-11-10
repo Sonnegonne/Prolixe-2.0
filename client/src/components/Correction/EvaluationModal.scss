@@ -109,6 +109,107 @@
     }
   }
 
+  // --- CHOIX DU TYPE DE GRILLE (critères / questions) ---
+  .mode-switch {
+    display: inline-flex;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    margin-bottom: 1.5rem;
+    background: var(--bg-dark-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.6rem;
+
+    button {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.45rem 0.9rem;
+      border: none;
+      border-radius: 0.45rem;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+
+      &:hover { color: var(--text-light); }
+      &.active {
+        background: rgba(var(--accent-cyan-rgb), 0.15);
+        color: var(--accent-cyan);
+      }
+    }
+  }
+
+  // --- MODE « PAR QUESTIONS » ---
+  .questions-editor {
+    .total-badge {
+      color: var(--accent-cyan);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .questions-settings {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+
+      .form-group { width: 180px; }
+
+      .btn-add-crit {
+        @include btn-secondary-base;
+        font-size: 0.85rem;
+        padding: 0.7rem 1rem;
+        border: 1px dashed var(--accent-cyan);
+        background: transparent;
+        color: var(--accent-cyan);
+
+        &:hover {
+          background: rgba(var(--accent-cyan-rgb), 0.1);
+          border-style: solid;
+        }
+      }
+    }
+
+    .questions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+      gap: 0.6rem;
+    }
+
+    .question-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.5rem;
+      background: var(--bg-dark-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 0.6rem;
+
+      &:focus-within { border-color: var(--accent-cyan); }
+
+      span {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        font-weight: 600;
+      }
+
+      input {
+        width: 100%;
+        background: transparent;
+        border: none;
+        color: var(--text-light);
+        font-size: 1rem;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+
+        &:focus { outline: none; }
+      }
+    }
+  }
+
   // --- STYLE DES LIGNES DE CRITÈRES (DRAG & DROP) ---
   .sortable-list {
     display: flex;
